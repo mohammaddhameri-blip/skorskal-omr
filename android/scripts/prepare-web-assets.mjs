@@ -38,6 +38,6 @@ writeFileSync(appFile,script,'utf8');
 
 const html=join(dst,'index.html');
 let h=readFileSync(html,'utf8');
-h=h.replace('v1.2 <span>·</span> On-device marking','Android v0.1.0 <span>·</span> On-device marking');
+h=h.replace('v1.3 <span>·</span> On-device marking','Android v0.2.0 <span>·</span> On-device marking');
 writeFileSync(html,h,'utf8');
 console.log('Bundled Skorskal website assets with native exports and camera support.');

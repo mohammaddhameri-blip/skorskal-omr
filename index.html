@@ -4,12 +4,13 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#102739"><meta name="description" content="skorskal: mobile OMR grading for 40-question A4 sheets. All marking stays on this device.">
   <link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="assets/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="style.css?v=20261020-keys2"><title>skorskal · OMR Scanner</title>
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem('skorskal_theme')==='dark'?'dark':'light'}catch(e){document.documentElement.dataset.theme='light'}</script>
+  <link rel="stylesheet" href="style.css?v=20261020-dark-review"><title>skorskal · OMR Scanner</title>
 </head>
 <body>
 <header class="app-header">
   <div class="brand"><span class="logo">s<span>.</span></span><div><strong>skorskal</strong><small>by MrDhameri <span class="copyright">©</span></small></div></div>
-  <span class="header-pill"><span class="status-dot"></span> 40-question OMR</span>
+  <div class="header-actions"><button type="button" id="themeToggle" class="theme-toggle" aria-label="Switch to dark mode" title="Dark mode" aria-pressed="false">🌙</button><span class="header-pill"><span class="status-dot"></span> 40-question OMR</span></div>
 </header>
 <div class="shell">
   <nav class="nav-tabs" aria-label="Sections">
@@ -89,9 +90,9 @@
       <div class="card slim"><div class="card-head"><h3>All results</h3><span class="mini-pill" id="resultsCount">0 saved</span></div><div class="scroll-table"><table><thead><tr><th>Pupil</th><th>Paper</th><th>Mark</th><th>Status</th><th></th></tr></thead><tbody id="resultsTable"></tbody></table></div></div>
     </section>
   </main>
-  <footer>skorskal© by MrDhameri <span>·</span> A4 <span>·</span> 40 questions <span>·</span> v1.2 <span>·</span> On-device marking</footer>
+  <footer>skorskal© by MrDhameri <span>·</span> A4 <span>·</span> 40 questions <span>·</span> v1.3 <span>·</span> On-device marking</footer>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
-<script type="module" src="app.js?v=20261020-keys2"></script>
+<script type="module" src="app.js?v=20261020-dark-review"></script>
 </body>
 </html>

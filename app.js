@@ -8,6 +8,24 @@ const persist=(key,value)=>localStorage.setItem(`skorskal_${key}`,JSON.stringify
 let template,keys=load('keys',{}),people=load('roster',[]),records=load('results',[]),workCanvas=null,corners=null,warp=null,scanned=null,current=null,
   stream=null,adjusting=false,selectedCorner=-1,sample=false,imageSource=null,workbookBuffer=null,workbookFileName='';
 let toastTimer;
+// Theme preference is local to this browser / APK, independent from exam records.
+const themeButton=$('themeToggle');
+function setTheme(mode){
+  const dark=mode==='dark';
+  document.documentElement.dataset.theme=dark?'dark':'light';
+  const themeMeta=document.querySelector('meta[name="theme-color"]');
+  if(themeMeta)themeMeta.setAttribute('content',dark?'#091923':'#102739');
+  themeButton.textContent=dark?'☀️':'🌙';
+  themeButton.setAttribute('aria-label',dark?'Switch to light mode':'Switch to dark mode');
+  themeButton.setAttribute('title',dark?'Light mode':'Dark mode');
+  themeButton.setAttribute('aria-pressed',String(dark));
+}
+setTheme(document.documentElement.dataset.theme==='dark'?'dark':'light');
+themeButton.addEventListener('click',()=>{
+  const next=document.documentElement.dataset.theme==='dark'?'light':'dark';
+  setTheme(next);
+  try{localStorage.setItem('skorskal_theme',next);}catch(e){console.warn('Theme preference was not saved.',e);}
+});
 function toast(message){$('toast').textContent=message;$('toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('show'),3200);}
 function message(text,type='neutral'){$('scanMessage').hidden=!text;$('scanMessage').textContent=text;$('scanMessage').className=`message ${type}`;}
 function code(v){return String(v??'').padStart(2,'0');}
@@ -137,14 +155,34 @@ function refreshReview(){
   $('saveWarning').textContent=[current.sample?'Demo mode: this is not a real pupil. Scan a real sheet to save marks.':'',!goodId?'Correct the examinee ID before saving.':'',!p?'No roster match: please verify the handwritten name.':'',!key?'No answer key: this scan will be saved as Ungraded.':'',invalid?`${invalid} blank, multiple, or uncertain answers currently count as zero.`:''].filter(Boolean).join(' ');
   $('saveResultBtn').disabled=!goodId||!!current.sample;
 }
-function renderAnswerGrid(){const grid=$('answerGrid');grid.innerHTML='';for(let q=1;q<=40;q++){
-  const data=current.answers[String(q)],row=document.createElement('div');row.className='answer-line';
-  const title=document.createElement('span');title.className='answer-num';title.textContent=q+'.';row.appendChild(title);
-  for(const ans of ['A','B','C','D']){
-    const b=document.createElement('button');b.className=`opt ${data.answer===ans?'selected':''} ${data.status==='multiple'&&data.scores?.[ans]>.19?'mismatch':''}`;
-    b.textContent=ans;b.title=`Question ${q}: ${ans}`;b.onclick=()=>{data.answer=data.answer===ans?null:ans;data.status=data.answer?'ok':'blank';renderAnswerGrid();refreshReview();};row.appendChild(b);
-  }grid.appendChild(row);
-}}
+function renderAnswerGrid(){
+  const grid=$('answerGrid');
+  grid.replaceChildren();
+  for(const [first,last] of [[1,20],[21,40]]){
+    const column=document.createElement('div');
+    column.className='answer-column';
+    for(let q=first;q<=last;q++){
+      const data=current.answers[String(q)]||{answer:null,status:'blank'};
+      const row=document.createElement('div');row.className='answer-line';
+      const title=document.createElement('span');title.className='answer-num';title.textContent=q+'.';row.appendChild(title);
+      for(const ans of ['A','B','C','D']){
+        const b=document.createElement('button');
+        b.type='button';
+        b.className=`opt ${data.answer===ans?'selected':''} ${data.status==='multiple'&&data.scores?.[ans]>.19?'mismatch':''}`;
+        b.textContent=ans;b.title=`Question ${q}: ${ans}`;
+        b.onclick=()=>{
+          data.answer=data.answer===ans?null:ans;
+          data.status=data.answer?'ok':'blank';
+          current.answers[String(q)]=data;
+          renderAnswerGrid();refreshReview();
+        };
+        row.appendChild(b);
+      }
+      column.appendChild(row);
+    }
+    grid.appendChild(column);
+  }
+}
 function makeRecord(){const {info,key,counts}=calculate(),p=getPerson(info.year,info.classCode,info.examNo);
   if(!info.year||!info.classCode||$('editNo').value.trim()===''||$('editSubject').value.trim()==='')throw new Error('Complete pupil year, class, number, and subject.');
   const invalid=Object.values(current.answers).filter(a=>a.status!=='ok').length;

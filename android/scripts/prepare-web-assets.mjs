@@ -31,7 +31,7 @@ const nativeDownload=`function download(data,name,type='text/plain'){
   setTimeout(()=>URL.revokeObjectURL(url),2000);
 }`;
 script=script.slice(0,originalStart)+nativeDownload+script.slice(originalEnd);
-const swLine="if('serviceWorker'in navigator && location.protocol!=='file:')navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});";
+const swLine="if('serviceWorker'in navigator && location.protocol!=='file:')navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'}).then(reg=>reg.update()).catch(()=>{});";
 if(!script.includes(swLine)) throw new Error('Could not locate service worker startup');
 script=script.replace(swLine,'// Offline assets are bundled in this APK. No web service worker is needed.');
 writeFileSync(appFile,script,'utf8');

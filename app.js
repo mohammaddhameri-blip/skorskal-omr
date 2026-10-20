@@ -170,12 +170,22 @@ $('nextPupilBtn').addEventListener('click',()=>{current=null;scanned=null;warp=n
 
 // Answer keys
 function updateKeyGrid(){
-  const grid=$('keyGrid');grid.innerHTML='';for(let q=1;q<=40;q++){
-    const row=document.createElement('div');row.className='key-row';const title=document.createElement('strong');title.textContent=`${q}.`;row.appendChild(title);
-    const selected=keyDraft[String(q)]||null;
-    for(const ans of ['A','B','C','D']){const btn=document.createElement('button');btn.className=`opt ${selected===ans?'selected':''}`;btn.textContent=ans;btn.title=`Key Q${q}: ${ans}`;
-      btn.onclick=()=>{if(selected===ans)delete keyDraft[String(q)];else keyDraft[String(q)]=ans;updateKeyGrid();};row.appendChild(btn);}
-    grid.appendChild(row);
+  const grid=$('keyGrid');grid.innerHTML='';
+  for(const [first,last] of [[1,20],[21,40]]){
+    const column=document.createElement('div');column.className='key-column';
+    for(let q=first;q<=last;q++){
+      const row=document.createElement('div');row.className='key-row';
+      const title=document.createElement('strong');title.textContent=`${q}.`;row.appendChild(title);
+      const selected=keyDraft[String(q)]||null;
+      for(const ans of ['A','B','C','D']){
+        const btn=document.createElement('button');btn.type='button';
+        btn.className=`opt ${selected===ans?'selected':''}`;btn.textContent=ans;btn.title=`Key Q${q}: ${ans}`;
+        btn.onclick=()=>{if(selected===ans)delete keyDraft[String(q)];else keyDraft[String(q)]=ans;updateKeyGrid();};
+        row.appendChild(btn);
+      }
+      column.appendChild(row);
+    }
+    grid.appendChild(column);
   }
 }
 let keyDraft={};
@@ -269,6 +279,6 @@ async function init(){try{
   template=await fetch('./template.json').then(r=>{if(!r.ok)throw new Error('Template not found.');return r.json();});
   if(Object.keys(template.questions).length!==40||Object.keys(template.anchors).length!==4)throw new Error('OMR calibration file invalid.');
   seedMenus();renderKeys();renderRoster();renderResults();
-  if('serviceWorker'in navigator && location.protocol!=='file:')navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  if('serviceWorker'in navigator && location.protocol!=='file:')navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'}).then(reg=>reg.update()).catch(()=>{});
 }catch(e){message('Could not initialize Skorskal: '+e.message+'. Serve this folder over localhost or HTTPS.','error');}}
 init();

@@ -1,0 +1,7 @@
+{
+  "name": "skorskal-omr",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Static four-anchor 40-question OMR grading app"
+}

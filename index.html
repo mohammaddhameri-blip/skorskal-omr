@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#102739"><meta name="description" content="skorskal: mobile OMR grading for 40-question A4 sheets. All marking stays on this device.">
+  <link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css"><title>skorskal · OMR Scanner</title>
+</head>
+<body>
+<header class="app-header">
+  <div class="brand"><span class="logo">s<span>.</span></span><div><strong>skorskal</strong><small>by MrDhameri <span class="copyright">©</span></small></div></div>
+  <span class="header-pill"><span class="status-dot"></span> 40-question OMR</span>
+</header>
+<div class="shell">
+  <nav class="nav-tabs" aria-label="Sections">
+    <button class="nav active" data-tab="scan"><span>▣</span> Scan</button>
+    <button class="nav" data-tab="keys"><span>☷</span> Answer keys</button>
+    <button class="nav" data-tab="roster"><span>♟</span> Pupils</button>
+    <button class="nav" data-tab="results"><span>▤</span> Results</button>
+  </nav>
+  <main>
+    <section class="page visible" id="page-scan">
+      <div class="page-heading"><div><span class="eyebrow">OMR SCANNER</span><h1>Mark a paper</h1><p>Point the camera at all four black squares, or upload a photo.</p></div><a class="text-link" href="Skorskal_A4_OMR_40.pdf" download>Print OMR ↗</a></div>
+      <div class="scan-layout">
+        <div class="card scan-card">
+          <div class="scanner-stage" id="scannerStage">
+            <div id="emptyScan" class="scan-empty"><div class="scan-icon">⌗</div><strong>Ready to scan</strong><p>Use a well-lit, flat A4 sheet.<br>Keep all four corner squares visible.</p></div>
+            <video id="camera" autoplay playsinline muted hidden></video>
+            <canvas id="photoCanvas" hidden></canvas>
+            <canvas id="alignedCanvas" hidden></canvas>
+            <div class="stage-tag" id="stageTag" hidden></div>
+          </div>
+          <div class="scan-toolbar">
+            <button class="btn primary" id="cameraBtn">Start camera</button>
+            <button class="btn primary" id="captureBtn" hidden>Capture & scan</button>
+            <label class="btn secondary file-btn">Upload photo<input type="file" id="imageInput" accept="image/*"></label>
+            <button class="btn ghost" id="demoBtn" title="Test recognition using a sample shaded sheet">Try sample</button>
+          </div>
+          <div class="scan-toolbar scan-tools" id="scanTools" hidden>
+            <button class="btn secondary" id="manualBtn">Adjust 4 corners</button>
+            <button class="btn secondary" id="rescanBtn">Scan again</button>
+            <button class="btn secondary" id="rotate90Btn">Rotate 90°</button>
+            <button class="btn secondary" id="flipBtn">Rotate 180°</button>
+            <button class="btn primary" id="applyBtn" hidden>Apply corners</button>
+          </div>
+          <div id="scanMessage" role="status" class="message neutral" hidden></div>
+          <p class="helper">Camera access requires HTTPS or localhost. Images and results are processed in your browser.</p>
+        </div>
+        <div class="card review-card" id="reviewCard">
+          <div class="card-head"><h2>Scan review</h2><span id="reviewStatus" class="mini-pill">Waiting</span></div>
+          <div id="reviewEmpty" class="review-empty"><div>◎</div><p>Your detected pupil and answer results will appear here.</p></div>
+          <div id="reviewBody" hidden>
+            <div class="review-id"><div><small>DETECTED ID</small><strong id="detectedId">—</strong><p id="pupilName">Not identified</p></div><span id="idBadge" class="mini-pill">Check</span></div>
+            <p class="field-label">Verify pupil details</p>
+            <div class="field-grid four"><label>Year<input id="editYear" inputmode="numeric" maxlength="1"></label><label>Class<input id="editClass" maxlength="1"></label><label>No.<input id="editNo" inputmode="numeric" maxlength="2"></label><label>Subject<input id="editSubject" inputmode="numeric" maxlength="2"></label></div>
+            <div class="score-wrap"><div><small>MARKS</small><strong id="markTotal">—</strong><p id="gradeInfo">Set an answer key to grade</p></div><div class="score-rings"><span id="scorePercent">—</span></div></div>
+            <div class="summary-grid"><div><small>Q1–20</small><strong id="scoreLeft">—</strong></div><div><small>Q21–40</small><strong id="scoreRight">—</strong></div><div><small>To review</small><strong id="scoreReview">—</strong></div></div>
+            <div class="answer-tools"><h3>Answers</h3><span class="helper">Tap a choice to correct a scan</span></div>
+            <div id="answerGrid" class="answers-review"></div>
+            <p id="saveWarning" class="inline-warning" hidden></p>
+            <button class="btn primary full" id="saveResultBtn">Save this pupil's result</button>
+            <button class="btn secondary full" id="nextPupilBtn">Next pupil</button>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="page" id="page-keys">
+      <div class="page-heading"><div><span class="eyebrow">ANSWER KEYS</span><h1>Set up marking</h1><p>Create one key for each year and subject. Saved keys remain available for the next pupil.</p></div></div>
+      <div class="card form-card"><div class="field-grid three"><label>Year<select id="keyYear"></select></label><label>Subject code<select id="keySubject"></select></label><label>Examination / key name<input id="keyTitle" placeholder="e.g. Year 5 English UASA"></label></div>
+        <div class="key-actions"><button class="btn secondary" id="loadKeyBtn">Load saved key</button><button class="btn secondary" id="clearKeyBtn">Clear choices</button><button class="btn primary" id="saveKeyBtn">Save answer key</button></div>
+        <div class="card-divider"></div>
+        <div class="key-paste"><label>Quick paste (optional)<textarea id="keyPaste" rows="2" placeholder="Paste 40 letters, e.g. ABCDBACD... or 1:A 2:C 3:B ..."></textarea></label><button class="btn secondary" id="applyPasteBtn">Apply pasted answers</button></div>
+        <div class="key-grid" id="keyGrid"></div>
+      </div>
+      <div class="card slim"><h3>Saved answer keys</h3><div id="savedKeys" class="list-container"></div></div>
+    </section>
+    <section class="page" id="page-roster">
+      <div class="page-heading"><div><span class="eyebrow">PUPIL ROSTERS</span><h1>Class lists</h1><p>Match shaded examinee numbers to names in your roster.</p></div></div>
+      <div class="card form-card">
+        <div class="import-bar"><label class="btn primary file-btn">Import Excel / CSV<input type="file" id="rosterInput" accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label><button class="btn secondary" id="exportRosterBtn">Export roster CSV</button><span id="rosterImportStatus" class="helper">Excel sheets can use headers Name, No, Year, Class, or sheet names such as 5T.</span></div>
+        <div class="card-divider"></div><h3>Add / correct pupil</h3>
+        <div class="field-grid pupil"><label>Year<select id="pupilYear"></select></label><label>Class<select id="pupilClass"><option>C</option><option>G</option><option>T</option></select></label><label>No.<input id="pupilNo" type="number" min="0" max="99" placeholder="12"></label><label>Name<input id="pupilInputName" placeholder="Pupil's name"></label><button class="btn primary" id="addPupilBtn">Save pupil</button></div>
+      </div>
+      <div class="card slim"><div class="card-head"><h3>Registered pupils</h3><span id="rosterCount" class="mini-pill">0 pupils</span></div><label class="search-field">Search pupils <input type="search" id="rosterSearch" placeholder="Name, year, class or number"></label><div class="scroll-table"><table><thead><tr><th>ID</th><th>Name</th><th>Source</th><th></th></tr></thead><tbody id="rosterTable"></tbody></table></div></div>
+    </section>
+    <section class="page" id="page-results">
+      <div class="page-heading"><div><span class="eyebrow">MARKING RECORDS</span><h1>Saved results</h1><p>Results are stored on this device. Export regularly to back them up.</p></div></div>
+      <div class="card slim"><div class="result-actions"><button class="btn primary" id="exportResultsBtn">Export CSV</button><button class="btn secondary" id="exportWorkbookBtn">Update Excel roster</button><button class="btn secondary" id="backupBtn">Backup JSON</button><label class="btn secondary file-btn">Restore JSON<input type="file" id="restoreInput" accept=".json,application/json"></label></div><div id="excelHint" class="helper">Excel export preserves the original roster workbook and adds columns for the latest saved result per pupil. Works when an .xlsx roster has been imported.</div></div>
+      <div class="card slim"><div class="card-head"><h3>All results</h3><span class="mini-pill" id="resultsCount">0 saved</span></div><div class="scroll-table"><table><thead><tr><th>Pupil</th><th>Paper</th><th>Mark</th><th>Status</th><th></th></tr></thead><tbody id="resultsTable"></tbody></table></div></div>
+    </section>
+  </main>
+  <footer>skorskal© by MrDhameri <span>·</span> A4 <span>·</span> 40 questions <span>·</span> On-device marking</footer>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

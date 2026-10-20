@@ -1,0 +1,77 @@
+name: Build Skorskal Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - 'app.js'
+      - 'index.html'
+      - 'style.css'
+      - 'vision.js'
+      - 'workbook.js'
+      - 'template.json'
+      - 'Skorskal_A4_OMR_40.pdf'
+      - 'assets/**'
+      - '.github/workflows/build-android.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    name: Skorskal Android test APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out Skorskal
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Bundle current Skorskal web assets
+        run: node android/scripts/prepare-web-assets.mjs
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android build tools
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+
+      - name: Compile and sign test APK
+        run: gradle --no-daemon -p android :app:assembleDebug
+
+      - name: Prepare APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk Skorskal-OMR-v0.1.0-test.apk
+
+      - name: Save downloadable APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Skorskal-OMR-v0.1.0-test-APK
+          path: Skorskal-OMR-v0.1.0-test.apk
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish public test APK in GitHub Releases
+        if: github.ref == 'refs/heads/main'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view v0.1.0-test >/dev/null 2>&1 || gh release create v0.1.0-test --title "Skorskal OMR v0.1.0 — Android test APK" --notes "Test build (debug signed), Android 10+. Camera, 40-question scanner, pupil roster, Excel import/export, and local offline records. Do not treat as final release; future permanently signed APK upgrades may require reinstalling." --prerelease
+          gh release upload v0.1.0-test Skorskal-OMR-v0.1.0-test.apk --clobber

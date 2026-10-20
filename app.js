@@ -221,8 +221,20 @@ $('addPupilBtn').onclick=()=>{const year=$('pupilYear').value,classCode=$('pupil
   persist('roster',people);$('pupilInputName').value='';$('pupilNo').value='';renderRoster();toast('Pupil saved.');
 };
 $('rosterSearch').addEventListener('input',renderRoster);
-function renderRoster(){const term=$('rosterSearch').value.toLowerCase(),visible=people.filter(p=>`${p.year} ${p.classCode} ${p.examNo} ${p.name}`.toLowerCase().includes(term));
-  $('rosterCount').textContent=`${people.length} pupils`;const body=$('rosterTable');body.innerHTML='';
+$('rosterYear').addEventListener('change',renderRoster);
+$('rosterClass').addEventListener('change',renderRoster);
+function renderRoster(){
+  const term=$('rosterSearch').value.trim().toLowerCase();
+  const selectedYear=$('rosterYear').value;
+  const selectedClass=$('rosterClass').value;
+  const visible=people.filter(p=>
+    (!selectedYear||String(p.year)===selectedYear)&&
+    (!selectedClass||String(p.classCode||'').toUpperCase()===selectedClass)&&
+    `${p.year} ${p.classCode} ${p.examNo} ${p.name}`.toLowerCase().includes(term)
+  );
+  const filtered=Boolean(selectedYear||selectedClass||term);
+  $('rosterCount').textContent=filtered?`${visible.length} of ${people.length} pupils`:`${people.length} pupils`;
+  const body=$('rosterTable');body.innerHTML='';
   for(const p of visible.slice(0,350)){const tr=document.createElement('tr');const id=personId(p.year,p.classCode,p.examNo);
     tr.innerHTML=`<td>${safeText(id)}</td><td>${safeText(p.name)}</td><td><small>${safeText(p._sheet||'Manual')}</small></td>`;
     const td=document.createElement('td'),b=document.createElement('button');b.className='table-btn danger';b.textContent='Remove';b.onclick=()=>{if(!confirm(`Remove ${p.name}?`))return;people=people.filter(k=>k!==p);persist('roster',people);renderRoster();};td.append(b);tr.append(td);body.append(tr);

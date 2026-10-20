@@ -7,3 +7,9 @@
 .key-grid{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(20,auto);grid-auto-flow:column;column-gap:18px;}
 .key-row{min-width:0;}
 @media(max-width:480px){.key-grid{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:8px;row-gap:3px}.key-row{gap:2px}.key-row strong{min-width:24px;font-size:11px}.key-row .opt{min-width:20px;padding:0 2px;font-size:10px;}}
+
+/* Skorskal Answer Keys: one actual column per 20-question block. */
+.key-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:auto;grid-auto-flow:row;column-gap:18px;row-gap:0;}
+.key-column{display:flex;min-width:0;flex-direction:column;gap:4px;}
+.key-column .key-row{min-width:0;}
+@media(max-width:480px){.key-grid{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:8px}.key-column .key-row{gap:2px}.key-column .key-row strong{min-width:24px;font-size:11px}.key-column .opt{min-width:20px;padding:0 2px;font-size:10px}}

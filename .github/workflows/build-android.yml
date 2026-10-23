@@ -1,4 +1,4 @@
-name: Build Skorskal Android APK
+name: Build and publish Skorskal Android APK
 
 on:
   workflow_dispatch:
@@ -11,6 +11,7 @@ on:
       - 'style.css'
       - 'vision.js'
       - 'workbook.js'
+      - 'roster-2026.json'
       - 'template.json'
       - 'Skorskal_A4_OMR_40.pdf'
       - 'assets/**'
@@ -19,11 +20,17 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: skorskal-release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build-apk:
-    name: Skorskal Android test APK
+    name: Compile APK and publish signed auto-update release
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    env:
+      SKORSKAL_BUILD_NUMBER: ${{ github.run_number }}
     steps:
       - name: Check out Skorskal
         uses: actions/checkout@v4
@@ -55,25 +62,55 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
-      - name: Compile and sign test APK
+      - name: Compile debug test APK (not for in-place auto updates)
         run: gradle --no-daemon -p android :app:assembleDebug
 
-      - name: Prepare APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk Skorskal-OMR-v0.2.0-test.apk
-
-      - name: Save downloadable APK artifact
+      - name: Save test APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Skorskal-OMR-v0.2.0-test-APK
-          path: Skorskal-OMR-v0.2.0-test.apk
+          name: Skorskal-OMR-v0.3.${{ github.run_number }}-DEBUG
+          path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 30
 
-      - name: Publish public test APK in GitHub Releases
-        if: github.ref == 'refs/heads/main'
-        continue-on-error: true
+      - name: Prepare permanent signing key
+        id: signing
+        env:
+          KEYSTORE_B64: ${{ secrets.SKORSKAL_KEYSTORE_B64 }}
+          SIGNING_PASSWORD: ${{ secrets.SKORSKAL_SIGNING_PASSWORD }}
+        shell: bash
+        run: |
+          if [[ -z "$KEYSTORE_B64" || -z "$SIGNING_PASSWORD" ]]; then
+            echo "Publisher signing secrets are absent: no official release will be published."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/skorskal.p12"
+          chmod 600 "$RUNNER_TEMP/skorskal.p12"
+          echo "SKORSKAL_SIGNING_KEYSTORE_PATH=$RUNNER_TEMP/skorskal.p12" >> "$GITHUB_ENV"
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      - name: Build release signed with publisher key
+        if: steps.signing.outputs.ready == 'true' && github.ref == 'refs/heads/main'
+        env:
+          SKORSKAL_SIGNING_PASSWORD: ${{ secrets.SKORSKAL_SIGNING_PASSWORD }}
+        shell: bash
+        run: |
+          gradle --no-daemon -p android :app:assembleRelease
+          cp android/app/build/outputs/apk/release/app-release.apk "Skorskal-OMR-v0.3.${GITHUB_RUN_NUMBER}.apk"
+          sha256sum "Skorskal-OMR-v0.3.${GITHUB_RUN_NUMBER}.apk" > "Skorskal-OMR-v0.3.${GITHUB_RUN_NUMBER}.apk.sha256"
+
+      - name: Publish official GitHub Release for in-app updates
+        if: steps.signing.outputs.ready == 'true' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
-          gh release view v0.2.0-test >/dev/null 2>&1 || gh release create v0.2.0-test --title "Skorskal OMR v0.2.0 — Android test APK" --notes "Test build (debug signed), Android 10+. Camera, 40-question scanner, pupil roster, Excel import/export, and local offline records. Do not treat as final release; future permanently signed APK upgrades may require reinstalling." --prerelease
-          gh release upload v0.2.0-test Skorskal-OMR-v0.2.0-test.apk --clobber
+          tag="v0.3.${GITHUB_RUN_NUMBER}"
+          apk="Skorskal-OMR-${tag}.apk"
+          checksum="${apk}.sha256"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "$apk" "$checksum" --clobber
+          else
+            gh release create "$tag" "$apk" "$checksum" --target "$GITHUB_SHA" --title "Skorskal OMR ${tag}" --latest --notes "Official publisher-signed Android APK. Automatic update checks on app launch and manual checks from the ↻ button. The installer always requires Android approval. All releases use the same signing key; never distribute the temporary debug artifact as an upgradable installation."
+          fi

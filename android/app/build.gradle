@@ -1,5 +1,8 @@
 plugins { id 'com.android.application' }
 
+def skorskalRunNumber = System.getenv('SKORSKAL_BUILD_NUMBER')
+def skorskalVersionPatch = skorskalRunNumber?.isInteger() ? Integer.parseInt(skorskalRunNumber) : 0
+
 android {
     namespace 'com.mrdhameri.skorskal'
     compileSdk 35
@@ -8,8 +11,26 @@ android {
         applicationId 'com.mrdhameri.skorskal'
         minSdk 29
         targetSdk 34
-        versionCode 2
-        versionName '0.2.0'
+        versionCode 300000 + skorskalVersionPatch
+        versionName "0.3.${skorskalVersionPatch}"
+    }
+    signingConfigs {
+        skorskalRelease {
+            def source = System.getenv('SKORSKAL_SIGNING_KEYSTORE_PATH')
+            if (source) {
+                storeFile file(source)
+                storePassword System.getenv('SKORSKAL_SIGNING_PASSWORD')
+                keyAlias 'skorskal'
+                keyPassword System.getenv('SKORSKAL_SIGNING_PASSWORD')
+                storeType 'pkcs12'
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.skorskalRelease
+        }
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
@@ -19,4 +40,5 @@ android {
 
 dependencies {
     implementation 'androidx.webkit:webkit:1.12.1'
+    implementation 'androidx.core:core:1.15.0'
 }

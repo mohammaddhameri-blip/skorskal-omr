@@ -5,7 +5,7 @@
   <meta name="theme-color" content="#102739"><meta name="description" content="skorskal: mobile OMR grading for 40-question A4 sheets. All marking stays on this device.">
   <link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <script>try{document.documentElement.dataset.theme=localStorage.getItem('skorskal_theme')==='dark'?'dark':'light'}catch(e){document.documentElement.dataset.theme='light'}</script>
-  <link rel="stylesheet" href="style.css?v=20261020-dark-review"><title>skorskal · OMR Scanner</title>
+  <link rel="stylesheet" href="style.css?v=20261023-roster"><title>skorskal · OMR Scanner</title>
 </head>
 <body>
 <header class="app-header">
@@ -70,29 +70,35 @@
       <div class="card form-card"><div class="field-grid three"><label>Year<select id="keyYear"></select></label><label>Subject code<select id="keySubject"></select></label><label>Examination / key name<input id="keyTitle" placeholder="e.g. Year 5 English UASA"></label></div>
         <div class="key-actions"><button class="btn secondary" id="loadKeyBtn">Load saved key</button><button class="btn secondary" id="clearKeyBtn">Clear choices</button><button class="btn primary" id="saveKeyBtn">Save answer key</button></div>
         <div class="card-divider"></div>
-        <div class="key-paste"><label>Quick paste (optional)<textarea id="keyPaste" rows="2" placeholder="Paste 40 letters, e.g. ABCDBACD... or 1:A 2:C 3:B ..."></textarea></label><button class="btn secondary" id="applyPasteBtn">Apply pasted answers</button></div>
+        <div class="key-paste"><label>Quick paste (optional)<textarea id="keyPaste" rows="2" placeholder="Paste 20 or 40 letters (A–D), or numbered answers such as 1:A 2:C ..."></textarea></label><button class="btn secondary" id="applyPasteBtn">Apply pasted answers</button></div>
         <div class="key-grid" id="keyGrid"></div>
       </div>
       <div class="card slim"><h3>Saved answer keys</h3><div id="savedKeys" class="list-container"></div></div>
     </section>
     <section class="page" id="page-roster">
-      <div class="page-heading"><div><span class="eyebrow">PUPIL ROSTERS</span><h1>Class lists</h1><p>Match shaded examinee numbers to names in your roster.</p></div></div>
+      <div class="page-heading"><div><span class="eyebrow">OFFICIAL 2026 ROSTER</span><h1>Class lists</h1><p>Read-only pupil records, managed by the Skorskal publisher. No local roster imports or changes.</p></div></div>
       <div class="card form-card">
-        <div class="import-bar"><label class="btn primary file-btn">Import Excel / CSV<input type="file" id="rosterInput" accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label><button class="btn secondary" id="exportRosterBtn">Export roster CSV</button><span id="rosterImportStatus" class="helper">Excel sheets can use headers Name, No, Year, Class, or sheet names such as 5T.</span></div>
-        <div class="card-divider"></div><h3>Add / correct pupil</h3>
-        <div class="field-grid pupil"><label>Year<select id="pupilYear"></select></label><label>Class<select id="pupilClass"><option>C</option><option>G</option><option>T</option></select></label><label>No.<input id="pupilNo" type="number" min="0" max="99" placeholder="12"></label><label>Name<input id="pupilInputName" placeholder="Pupil's name"></label><button class="btn primary" id="addPupilBtn">Save pupil</button></div>
+        <div class="field-grid"><label>Staff roster access phrase<input id="rosterPassphrase" type="password" autocomplete="off" placeholder="Enter staff roster access phrase"></label></div>
+        <div class="key-actions"><button class="btn primary" id="unlockRosterBtn">Unlock 2026 roster</button><button class="btn secondary" id="checkUpdatesBtn">Check for updates ↗</button></div>
+        <p id="rosterImportStatus" class="helper" role="status">Roster locked. Enter the staff access phrase supplied by the Skorskal publisher.</p>
       </div>
-      <div class="card slim"><div class="card-head"><h3>Registered pupils</h3><span id="rosterCount" class="mini-pill">0 pupils</span></div><div class="roster-filters" role="group" aria-label="Filter registered pupils"><label>Year<select id="rosterYear"><option value="">All years</option><option value="1">Year 1</option><option value="2">Year 2</option><option value="3">Year 3</option><option value="4">Year 4</option><option value="5">Year 5</option><option value="6">Year 6</option></select></label><label>Class<select id="rosterClass"><option value="">All classes</option><option value="C">C — Cemerlang</option><option value="G">G — Gemilang</option><option value="T">T — Terbilang</option></select></label></div><label class="search-field">Search pupils <input type="search" id="rosterSearch" placeholder="Name or examinee number"></label><div class="scroll-table"><table><thead><tr><th>ID</th><th>Name</th><th>Source</th><th></th></tr></thead><tbody id="rosterTable"></tbody></table></div></div>
+      <div class="card slim"><div class="card-head"><h3>Registered pupils · 2026</h3><span id="rosterCount" class="mini-pill">Locked</span></div>
+      <div class="roster-filters" role="group" aria-label="Filter registered pupils">
+        <label>Year<select id="rosterYear"><option value="">All years</option><option value="1">Year 1</option><option value="2">Year 2</option><option value="3">Year 3</option><option value="4">Year 4</option><option value="5">Year 5</option><option value="6">Year 6</option></select></label>
+        <label>Class<select id="rosterClass"><option value="">All classes</option><option value="C">C — Cemerlang</option><option value="G">G — Gemilang</option><option value="T">T — Terbilang</option></select></label>
+      </div>
+      <label class="search-field">Search pupils <input type="search" id="rosterSearch" placeholder="Name or examinee number"></label>
+      <div class="scroll-table"><table><thead><tr><th>ID</th><th>Name</th><th>Source</th></tr></thead><tbody id="rosterTable"></tbody></table></div></div>
     </section>
     <section class="page" id="page-results">
       <div class="page-heading"><div><span class="eyebrow">MARKING RECORDS</span><h1>Saved results</h1><p>Results are stored on this device. Export regularly to back them up.</p></div></div>
-      <div class="card slim"><div class="result-actions"><button class="btn primary" id="exportResultsBtn">Export CSV</button><button class="btn secondary" id="exportWorkbookBtn">Update Excel roster</button><button class="btn secondary" id="backupBtn">Backup JSON</button><label class="btn secondary file-btn">Restore JSON<input type="file" id="restoreInput" accept=".json,application/json"></label></div><div id="excelHint" class="helper">Excel export preserves the original roster workbook and adds columns for the latest saved result per pupil. Works when an .xlsx roster has been imported.</div></div>
+      <div class="card slim"><div class="result-actions"><button class="btn primary" id="exportResultsBtn">Export CSV</button><button class="btn secondary" id="exportWorkbookBtn">Export marked roster (.xlsx)</button><button class="btn secondary" id="backupBtn">Backup JSON</button><label class="btn secondary file-btn">Restore JSON<input type="file" id="restoreInput" accept=".json,application/json"></label></div><div id="excelHint" class="helper">Excel export uses the current verified 2026 school roster and saved results. Requires the staff roster to be unlocked.</div></div>
       <div class="card slim"><div class="card-head"><h3>All results</h3><span class="mini-pill" id="resultsCount">0 saved</span></div><div class="scroll-table"><table><thead><tr><th>Pupil</th><th>Paper</th><th>Mark</th><th>Status</th><th></th></tr></thead><tbody id="resultsTable"></tbody></table></div></div>
     </section>
   </main>
-  <footer>skorskal© by MrDhameri <span>·</span> A4 <span>·</span> 40 questions <span>·</span> v1.3 <span>·</span> On-device marking</footer>
+  <footer>skorskal© by MrDhameri <span>·</span> A4 <span>·</span> 20/40 questions <span>·</span> v1.4 <span>·</span> On-device marking</footer>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
-<script type="module" src="app.js?v=20261020-dark-review"></script>
+<script type="module" src="app.js?v=20261023-roster"></script>
 </body>
 </html>

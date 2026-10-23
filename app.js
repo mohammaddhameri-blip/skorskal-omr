@@ -5,7 +5,7 @@ const yearChoices=['1','2','3','4','5','6'];
 const subjects={'00':'Pendidikan Muzik (proposed)','01':'Bahasa Melayu','02':'Bahasa Inggeris','03':'Mathematics (proposed)','04':'Science (proposed)','05':'Pendidikan Islam (proposed)','06':'Pendidikan Moral (proposed)','07':'Sejarah (proposed)','08':'RBT (proposed)','09':'Pendidikan Seni Visual (proposed)','10':'PJPK (proposed)'};
 const load=(key,fallback)=>{try{return JSON.parse(localStorage.getItem(`skorskal_${key}`))||fallback;}catch{return fallback;}};
 const persist=(key,value)=>localStorage.setItem(`skorskal_${key}`,JSON.stringify(value));
-let template,keys=load('keys',{}),people=[],rosterLoaded=false,records=load('results',[]),workCanvas=null,corners=null,warp=null,scanned=null,current=null,
+let template,keys=load('keys',{}),people=[],rosterLoaded=false,records=load('results',[]),attendance=load('attendance_2026',{}),workCanvas=null,corners=null,warp=null,scanned=null,current=null,
   stream=null,adjusting=false,selectedCorner=-1,sample=false,imageSource=null,workbookBuffer=null,workbookFileName='';
 let toastTimer;
 // Theme preference is local to this browser / APK, independent from exam records.
@@ -303,6 +303,7 @@ async function unlockRoster(passphrase){
   $('rosterPassphrase').value='';$('rosterPassphrase').disabled=true;
   $('unlockRosterBtn').disabled=true;$('unlockRosterBtn').textContent='Roster unlocked';
   $('rosterImportStatus').textContent='Official '+file.academicYear+' roster · '+roster.length+' pupils · read-only · version '+file.version;
+  $('rosterAccessPanel').hidden=true;
   renderRoster();if(current)refreshReview();
   try{sessionStorage.setItem('skorskal_staff_phrase_2026',passphrase);}catch{}
   return roster.length;
@@ -323,23 +324,76 @@ if(window.SkorskalAndroid?.checkForUpdates){
   const nativeUpdate=$('androidUpdateBtn');
   if(nativeUpdate){nativeUpdate.style.display='inline-flex';nativeUpdate.onclick=openSkorskalUpdates;}
 }
-$('rosterSearch').addEventListener('input',renderRoster);
-$('rosterYear').addEventListener('change',renderRoster);
-$('rosterClass').addEventListener('change',renderRoster);
-function renderRoster(){
-  const term=$('rosterSearch').value.trim().toLowerCase();
+// Attendance is a teacher-owned, device-local record. Only absent IDs are stored.
+// The encrypted official roster cannot be edited through attendance controls.
+const classLabels={C:'CEMERLANG',G:'GEMILANG',T:'TERBILANG'};
+function attendanceDateToday(){
+  const now=new Date();
+  return String(now.getFullYear())+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+}
+function selectedAttendance(){
+  const date=$('rosterDate').value||attendanceDateToday();
   const year=$('rosterYear').value,cls=$('rosterClass').value;
-  const visible=people.filter(p=>(!year||p.year===year)&&(!cls||p.classCode===cls)&&
-    `${p.year} ${p.classCode} ${p.examNo} ${p.name}`.toLowerCase().includes(term));
-  $('rosterCount').textContent=rosterLoaded?visible.length+' of '+people.length+' pupils':'Locked';
-  const body=$('rosterTable');body.replaceChildren();
-  if(!rosterLoaded){body.innerHTML='<tr><td colspan="3">Enter the staff roster access phrase to see 2026 pupils.</td></tr>';return;}
-  for(const p of visible.slice(0,500)){
-    const tr=document.createElement('tr');
-    tr.innerHTML=`<td>${safeText(personId(p.year,p.classCode,p.examNo))}</td><td>${safeText(p.name)}</td><td><small>2026 official</small></td>`;
-    body.appendChild(tr);
+  const pupils=people.filter(p=>p.year===year&&p.classCode===cls)
+    .sort((a,b)=>Number(a.examNo)-Number(b.examNo)||a.name.localeCompare(b.name));
+  const sessionKey=date+'|'+year+'|'+cls;
+  const absent=new Set(Array.isArray(attendance[sessionKey])?attendance[sessionKey]:[]);
+  return {date,year,cls,pupils,sessionKey,absent};
+}
+function saveAttendance(sessionKey,absent){
+  if(absent.size)attendance[sessionKey]=[...absent].sort();
+  else delete attendance[sessionKey];
+  persist('attendance_2026',attendance);
+}
+for(const id of ['rosterYear','rosterClass','rosterDate'])$(id).addEventListener('change',renderRoster);
+$('allPresentBtn').onclick=()=>{
+  if(!rosterLoaded)return;
+  const {sessionKey,absent}=selectedAttendance();
+  if(!absent.size){toast('Everyone is already marked present.');return;}
+  if(!confirm('Mark all pupils present for this class and date?'))return;
+  saveAttendance(sessionKey,new Set());
+  renderRoster();toast('All pupils marked present.');
+};
+function renderRoster(){
+  const list=$('attendanceList');
+  list.replaceChildren();
+  const count=$('rosterCount'),present=$('attendancePresent'),absentCount=$('attendanceAbsent');
+  if(!rosterLoaded){
+    count.textContent='Locked';present.textContent='—';absentCount.textContent='—';
+    $('allPresentBtn').disabled=true;
+    list.innerHTML='<p class="attendance-empty">Unlock the official 2026 roster to view pupil names.</p>';
+    return;
   }
-  if(!visible.length)body.innerHTML='<tr><td colspan="3">No pupils found.</td></tr>';
+  const {pupils,sessionKey,absent,year,cls}=selectedAttendance();
+  $('allPresentBtn').disabled=!pupils.length||!absent.size;
+  const presentNum=pupils.filter(p=>!absent.has(personId(p.year,p.classCode,p.examNo))).length;
+  count.textContent='Year '+year+' · '+classLabels[cls]+' · '+pupils.length+' pupils';
+  present.textContent=presentNum;
+  absentCount.textContent=pupils.length-presentNum;
+  if(!pupils.length){
+    list.innerHTML='<p class="attendance-empty">No pupils registered for the selected year and class.</p>';
+    return;
+  }
+  for(const pupil of pupils){
+    const pupilKey=personId(pupil.year,pupil.classCode,pupil.examNo);
+    const checked=!absent.has(pupilKey);
+    const label=document.createElement('label');
+    label.className='attendance-pupil'+(checked?'':' is-absent');
+    const checkbox=document.createElement('input');
+    checkbox.type='checkbox';checkbox.checked=checked;checkbox.value=pupilKey;
+    checkbox.setAttribute('aria-label',pupil.name+' present');
+    checkbox.addEventListener('change',()=>{
+      const changed=new Set(Array.isArray(attendance[sessionKey])?attendance[sessionKey]:[]);
+      if(checkbox.checked)changed.delete(pupilKey);else changed.add(pupilKey);
+      try{saveAttendance(sessionKey,changed);renderRoster();}
+      catch(e){checkbox.checked=!checkbox.checked;toast('Attendance could not be saved. Check device storage.');}
+    });
+    const number=document.createElement('span');number.className='attendance-no';number.textContent=pupil.examNo;
+    const name=document.createElement('strong');name.className='attendance-name';name.textContent=pupil.name;
+    const status=document.createElement('span');status.className='attendance-status';status.textContent=checked?'Present':'Absent';
+    label.append(checkbox,number,name,status);
+    list.appendChild(label);
+  }
 }
 
 // Results and backups
@@ -353,7 +407,7 @@ function renderResults(){const tb=$('resultsTable');tb.innerHTML='';$('resultsCo
 }
 $('exportResultsBtn').onclick=()=>{download(resultsCSV(records),'Skorskal_Results.csv','text/csv;charset=utf-8');toast('CSV exported.');};
 $('backupBtn').onclick=()=>{
-  download(JSON.stringify({app:'skorskal',version:2,keys,records},null,2),'Skorskal_Backup.json','application/json');
+  download(JSON.stringify({app:'skorskal',version:3,keys,records,attendance},null,2),'Skorskal_Backup.json','application/json');
   toast('Keys and marking results backed up. Official roster is never exported in backups.');
 };
 $('restoreInput').addEventListener('change',async e=>{
@@ -363,8 +417,10 @@ $('restoreInput').addEventListener('change',async e=>{
     if(backup.app!=='skorskal'||!Array.isArray(backup.records)||!backup.keys||typeof backup.keys!=='object')
       throw new Error('Not a valid Skorskal backup.');
     if(!confirm('Restore saved keys and results? The official 2026 roster cannot be replaced.'))return;
-    keys=backup.keys;records=backup.records;persist('keys',keys);persist('results',records);
-    renderResults();renderKeys();toast('Keys and results restored; official roster unchanged.');
+    keys=backup.keys;records=backup.records;
+    if(backup.attendance && typeof backup.attendance==='object' && !Array.isArray(backup.attendance))attendance=backup.attendance;
+    persist('keys',keys);persist('results',records);persist('attendance_2026',attendance);
+    renderResults();renderKeys();renderRoster();toast('Saved keys, results and attendance restored; official roster unchanged.');
   }catch(err){toast(err.message);}
   finally{e.target.value='';}
 });
@@ -377,7 +433,8 @@ $('exportWorkbookBtn').onclick=()=>{
 async function init(){try{
   template=await fetch('./template.json').then(r=>{if(!r.ok)throw new Error('Template not found.');return r.json();});
   if(Object.keys(template.questions).length!==40||Object.keys(template.anchors).length!==4)throw new Error('OMR calibration file invalid.');
-  seedMenus();renderKeys();renderRoster();renderResults();
+  seedMenus();$('rosterYear').value='2';$('rosterClass').value='C';$('rosterDate').value=attendanceDateToday();
+  renderKeys();renderRoster();renderResults();
   // Session-only unlock avoids saving a plaintext roster or persistent passphrase.
   let phrase='';try{phrase=sessionStorage.getItem('skorskal_staff_phrase_2026')||'';}catch{}
   if(phrase){unlockRoster(phrase).catch(()=>{try{sessionStorage.removeItem('skorskal_staff_phrase_2026');}catch{};});}

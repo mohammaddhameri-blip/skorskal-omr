@@ -1,45 +1,42 @@
-# skorskal — 40-question OMR scanner
+# Skorskal © by MrDhameri — Official 2026 OMR and class attendance
 
-Mobile-friendly, installable offline-capable web app for the approved skorskal A4 answer sheet with four black corner anchors, a six-row shaded ID (Year / Class / Examinee tens+ones / Subject tens+ones), a handwritten name line, and 40 A–D questions in two columns.
+Skorskal is an installable, offline-capable A4 OMR scanner for 20-question or 40-question answer keys, using one standardized 40-bubble A4 sheet (four black registration anchors, six-digit shaded pupil/subject ID).
 
-## Run it
+## Pupils — read-only official 2026 roster
 
-This is a **static website** (no server or API keys required). Host the folder on GitHub Pages or any HTTPS host. For local testing, from inside the extracted folder:
+Pupil names come from the **publisher-managed 2026 school roster** only. The file `roster-2026.json` contains **encrypted** records; names are not stored in public source code. Authorised staff unlock the roster using the staff access phrase supplied privately by the publisher. The roster is displayed on both the webapp and Android APK.
 
-```sh
-python3 -m http.server 8000
-```
+The **Pupils** tab has:
+- **Year** — 1, 2, 3, 4, 5, 6
+- **Class** — CEMERLANG (C), GEMILANG (G), TERBILANG (T)
+- **Attendance date** — defaults to today's device-local date
+- **Pupil names** — all ticked (**present**) by default; untick any absent pupil; the present/absent counts update immediately
 
-Open `http://localhost:8000` in your browser. Phone camera access requires HTTPS or localhost; uploading a picture also works.
+The attendance checklist is **saved automatically on that device, by date and class**. Opening a date again restores earlier absences; a different date begins with everyone present. Teachers may mark absence but cannot import, add, remove, or rename roster records. Backups of marking data include attendance IDs but never the official pupil names. Attendance is not automatically synchronised between teachers' devices.
 
-To enable GitHub Pages, publish the contents of this folder at the repository root, then choose **Settings → Pages → Deploy from a branch**, `main`, `/ (root)`.
+To update official pupil names, the publisher generates a new encrypted roster file and updates the repository. The webapp fetches it online when available, retaining an offline cache; the Android APK gets roster changes through signed APK updates.
 
-## Start marking
+## OMR marking
 
-1. Go to **Answer keys**. Choose Year and subject code, then tap choices for questions 1–40 or paste 40 answer letters. Save. Keys stay until manually overwritten or cleared by browser storage.
-2. Go to **Pupils** and import a roster `.csv` or `.xlsx`, or add pupils manually. CSV column headers should include `Name`, `No`, `Year`, `Class` (synonyms `Nama`, `Bil`, `Tahun`, `Kelas` are accepted). For Excel, sheet names like `5T`, `5 Terbilang`, or full columns for year/class help identify pupils. If no number column exists, the pupil number defaults to the numbered row after the header — review for accuracy.
-3. Go to **Scan** and start the camera, upload a photo, or tap **Try sample** to verify the scanner. Ensure the complete four-anchor sheet is visible.
-4. Check the pupil ID and answers. Correct mistakes by tapping answer letters. Blank/multiple/uncertain bubbles are scored zero unless corrected by a teacher.
-5. **Save this pupil's result**. Tap **Next pupil** and scan another; the key persists. The **Try sample** button uses a temporary 40/40 demo key without changing your saved keys.
-6. Go to **Results** to export CSV, update an imported Excel workbook, or back up the device records to JSON.
+1. Choose Year and Subject under **Answer keys**, then type/paste 20 or 40 A–D letters. A 20-letter paste populates questions 1–20; 21–40 remain blank and are not graded. Save the key.
+2. **Scan** an A4 OMR sheet using camera or an image. Review the ID, pupils' names and detected answers.
+3. Save the result. The answer key persists for the next pupil.
+4. **Results** keeps local marks, supports CSV/Excel exports, and allows JSON backup/restore of results, keys and attendance. Neither importing a backup nor using attendance controls can replace the official pupil roster.
 
-## Subject codes
+## Android APK — GitHub self-update
 
-`01` Bahasa Melayu and `02` Bahasa Inggeris are confirmed; additional codes `00` and `03`–`10` are proposed and editable in the app's key selection.
+The native Android APK checks the controlled GitHub Release tag **`android-latest`** each time the app opens (when online). A manual **↻** update button is also present in the APK header.
 
-## Design / image processing
+If a higher Android `versionCode` is published, Skorskal asks for approval, downloads the official `Skorskal-OMR.apk` and its SHA-256 checksum, validates the download, and invokes Android's system package installer for final approval. Offline use is unaffected when GitHub is unavailable. The application and local data stay intact with normal same-signature in-place upgrades.
 
-The scanner requires four black corner anchor squares. It locates large dark square connected components, fits an 8-parameter perspective transform, warps the photo into canonical A4 coordinates, and analyzes darkness inside each printed bubble while excluding the printed outlines. Manual four-corner dragging and 90°/180° rotation controls are available if detection fails. Source image, scores, keys and pupil rosters are not sent to a server.
+The GitHub Actions APK publishing workflow builds a **non-debuggable release APK** and restores its signing certificate from a private Actions cache. It fails safely rather than silently rotating an established signing certificate. **Keep a durable private backup of the signing keystore**: if GitHub discards that cache, future in-place updates cannot be published until the original certificate is restored.
 
-All scanned results and keys are stored in the browser. Scan images and the imported original workbook are stored in IndexedDB when available; **use Backup JSON and CSV exports regularly**. Clearing browser/site data removes these records. Uploaded Excel workbooks are parsed locally and written back with additional Skorskal columns, preserving existing workbook worksheets and data where supported; for complex or macro-enabled workbooks, keep a backup and review the output.
+**Important for older test APKs:** previously published `v0.2.0-test` APKs may use a different signing certificate, and Android will not install the newly signed app over them. Back up saved marking results first, then uninstall the old test APK and install the official `android-latest` APK once. Future releases with the same publisher certificate can update in place.
 
-## Limitations
+[Official APK releases](https://github.com/mohammaddhameri-blip/skorskal-omr/releases/tag/android-latest) · [APK build workflow](https://github.com/mohammaddhameri-blip/skorskal-omr/actions/workflows/build-android.yml)
 
-- Designed for **this exact printable OMR sheet**; do not use a different sheet layout or scale/crop the printed template when copying.
-- Requires reasonable focus and lighting; faint erasures and shadows may produce ambiguous readings and require review.
-- Does not currently provide automated handwriting OCR, cloud synchronization, teacher login or automatic AI grading for writing tasks.
-- On-device records are not synchronized across devices; use exported backups.
-- The updated Excel export adds result columns for the latest saved subject per pupil; export CSV retains *all* scanned attempts and subjects.
-- PWA installation depends on a supported HTTPS host and browser; APK conversion is a later step.
+## Website
 
-© skorskal by MrDhameri. All rights reserved.
+GitHub Pages hosts the site at [mohammaddhameri-blip.github.io/skorskal-omr](https://mohammaddhameri-blip.github.io/skorskal-omr/), with HTTPS for camera access. The webapp and Android app maintain independent **device-local** marking records and attendance; no marks are automatically transmitted to GitHub or elsewhere.
+
+© Skorskal by MrDhameri. All rights reserved.

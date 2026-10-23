@@ -95,3 +95,27 @@ html[data-theme="dark"] .table-btn.danger{background:#4a2c34;color:#ffb8b9;}
 html[data-theme="dark"] footer{color:#809ba8;}
 html[data-theme="dark"] .toast{background:#234451;color:#fff;}
 
+
+/* Read-only 2026 class register: clear tap targets for smartboard, phone and APK. */
+.attendance-filters{grid-template-columns:repeat(3,minmax(0,1fr));margin:14px 0 16px}
+.attendance-filters input[type=date]{display:block;width:100%;min-width:0;border:1px solid #d4e0e6;border-radius:8px;background:#fff;color:#233d4b;font-weight:550;padding:10px;margin-top:6px;font-size:13px}
+.attendance-summary{display:flex;gap:12px;align-items:center;padding:12px 0;border-top:1px solid #e3ecee;border-bottom:1px solid #e3ecee;flex-wrap:wrap}
+.attendance-summary>div{display:flex;gap:5px;align-items:baseline}
+.attendance-summary strong{color:#147f75;font-size:22px}
+.attendance-summary small{color:#66808a;font-size:12px;font-weight:600}
+.attendance-summary>div:nth-child(2) strong{color:#b55c52}
+.attendance-summary button{margin-left:auto}
+.attendance-help{margin:12px 0}
+.attendance-list{display:flex;flex-direction:column;gap:5px}
+.attendance-pupil{display:flex;align-items:center;gap:12px;min-height:51px;padding:9px 12px;background:var(--attendance-row-bg,#f7fafb);border:1px solid var(--attendance-row-border,#e3ebef);border-radius:9px;cursor:pointer;transition:background .1s}
+.attendance-pupil input[type=checkbox]{appearance:auto;accent-color:#10847a;flex:none;width:19px;height:19px;margin:0;cursor:pointer}
+.attendance-no{font-variant-numeric:tabular-nums;font-size:12px;min-width:23px;color:var(--attendance-number,#607e89)}
+.attendance-name{flex:1;font-size:13px;color:var(--attendance-name,#243e4c);line-height:1.4;min-width:0;overflow-wrap:anywhere}
+.attendance-status{font-size:11px;min-width:45px;text-align:right;font-weight:700;color:#147f75}
+.attendance-pupil.is-absent{background:var(--attendance-absent-bg,#fff0ee);border-color:var(--attendance-absent-border,#efc5bc)}
+.attendance-pupil.is-absent .attendance-status{color:#b0443a}
+.attendance-empty{color:var(--attendance-number,#68828b);text-align:center;padding:24px 6px}
+[data-theme=dark] .attendance-pupil{--attendance-row-bg:#19343f;--attendance-row-border:#36515e;--attendance-number:#a1b6c2;--attendance-name:#e3eff4}
+[data-theme=dark] .attendance-pupil.is-absent{--attendance-absent-bg:#422d31;--attendance-absent-border:#805057}
+[data-theme=dark] .attendance-filters input[type=date]{background:#102530;color:#ddecf1;border-color:#41606c}
+@media(max-width:600px){.attendance-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.attendance-filters label:last-child{grid-column:1/-1}.attendance-summary{gap:12px}.attendance-pupil{gap:9px;padding:10px 8px}.attendance-name{font-size:12px}}

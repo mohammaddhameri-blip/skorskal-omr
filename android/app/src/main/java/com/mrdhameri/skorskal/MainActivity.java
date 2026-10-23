@@ -35,6 +35,7 @@ public class MainActivity extends Activity {
     private PermissionRequest pendingCamera;
     private ValueCallback<Uri[]> pendingFile;
     private WebViewAssetLoader loader;
+    private UpdateManager updates;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -123,7 +124,14 @@ public class MainActivity extends Activity {
                 } catch (Exception error) { notifyUser("Could not save OMR PDF."); }
             }
         });
+        updates = new UpdateManager(this);
         web.loadUrl(HOME);
+        updates.checkForUpdates(false);
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        if (updates != null) updates.onResume();
     }
 
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
@@ -179,6 +187,9 @@ public class MainActivity extends Activity {
     }
 
     private class NativeExports {
+        @JavascriptInterface public void checkForUpdates() {
+            runOnUiThread(() -> { if (updates != null) updates.checkForUpdates(true); });
+        }
         @JavascriptInterface public void saveBase64(String base64, String name, String mime) {
             try {
                 byte[] content = Base64.decode(base64, Base64.DEFAULT);

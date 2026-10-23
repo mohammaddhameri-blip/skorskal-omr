@@ -6,7 +6,7 @@ self.addEventListener('fetch',event=>{
   if(event.request.method!=='GET')return;
   const url=new URL(event.request.url);
   if(url.origin!==self.location.origin)return;
-  const isCode=event.request.mode==='navigate'||/\.(?:js|css|html)$/i.test(url.pathname);
+  const isCode=event.request.mode==='navigate'||/\.(?:js|css|html)$/i.test(url.pathname)||url.pathname.endsWith('/roster-2026.json');
   if(isCode){
     event.respondWith(fetch(new Request(event.request,{cache:'no-store'})).then(response=>{
       if(response.ok){const copy=response.clone();event.waitUntil(caches.open(CACHE).then(cache=>cache.put(event.request,copy)));}

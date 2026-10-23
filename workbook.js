@@ -166,3 +166,36 @@ export async function updateWorkbook(originalBuffer,people,results){
   const files=[];for(const [name,entry] of entries)files.push([name,await contents(entry)]);
   return zipStored(files);
 }
+
+// Publisher-managed roster export: builds a fresh, valid .xlsx from the unlocked
+// official 2026 roster and the latest locally saved mark for each pupil.
+export function createRosterWorkbook(people,records){
+  const recent=new Map();
+  for(const result of records){
+    const id=`${result.year}${result.classCode}-${String(result.examNo).padStart(2,'0')}`;
+    const existing=recent.get(id);
+    if(!existing||String(existing.date||'')<=String(result.date||''))recent.set(id,result);
+  }
+  const headers=['Year','Class','Examinee No','Name','Subject Code','Mark','Maximum','Percentage','Status','Scanned At'];
+  const items=[headers,...people.map(p=>{
+    const r=recent.get(`${p.year}${p.classCode}-${p.examNo}`);
+    return [p.year,p.classCode,p.examNo,p.name,r?.subject??'',r?.correct??'',
+      r?.count??'',r?.percent===null||r?.percent===undefined?'':r.percent+'%',
+      r?.status??'',r?.date??''];
+  })];
+  const xmlRows=items.map((row,i)=>'<row r="'+(i+1)+'">'+row.map((value,j)=>{
+    const ref=indexToAlpha(j)+(i+1);
+    return '<c r="'+ref+'" t="inlineStr"><is><t>'+escapeXML(value)+'</t></is></c>';
+  }).join('')+'</row>').join('');
+  const main='http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+  const relationship='http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  const pkg='http://schemas.openxmlformats.org/package/2006/relationships';
+  const fileList=new Map([
+    ['[Content_Types].xml',encoder.encode('<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>')],
+    ['_rels/.rels',encoder.encode('<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="'+pkg+'"><Relationship Id="rId1" Type="'+relationship+'/officeDocument" Target="xl/workbook.xml"/></Relationships>')],
+    ['xl/workbook.xml',encoder.encode('<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="'+main+'" xmlns:r="'+relationship+'"><sheets><sheet name="2026 School Roster" sheetId="1" r:id="rId1"/></sheets></workbook>')],
+    ['xl/_rels/workbook.xml.rels',encoder.encode('<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="'+pkg+'"><Relationship Id="rId1" Type="'+relationship+'/worksheet" Target="worksheets/sheet1.xml"/></Relationships>')],
+    ['xl/worksheets/sheet1.xml',encoder.encode('<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="'+main+'"><sheetViews><sheetView workbookViewId="0"/></sheetViews><cols><col min="1" max="3" width="14" customWidth="1"/><col min="4" max="4" width="50" customWidth="1"/><col min="5" max="10" width="17" customWidth="1"/></cols><sheetData>'+xmlRows+'</sheetData></worksheet>')]
+  ]);
+  return zipStored(fileList);
+}

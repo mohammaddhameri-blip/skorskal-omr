@@ -314,7 +314,15 @@ $('unlockRosterBtn').onclick=async()=>{
   catch(e){$('rosterImportStatus').textContent=e.message;button.disabled=false;toast(e.message);}
 };
 $('rosterPassphrase').addEventListener('keydown',e=>{if(e.key==='Enter')$('unlockRosterBtn').click();});
-$('checkUpdatesBtn').onclick=()=>window.open('https://github.com/mohammaddhameri-blip/skorskal-omr/releases','_blank','noopener,noreferrer');
+const openSkorskalUpdates=()=>{
+  if(window.SkorskalAndroid?.checkForUpdates){window.SkorskalAndroid.checkForUpdates();return;}
+  window.open('https://github.com/mohammaddhameri-blip/skorskal-omr/releases','_blank','noopener,noreferrer');
+};
+$('checkUpdatesBtn').onclick=openSkorskalUpdates;
+if(window.SkorskalAndroid?.checkForUpdates){
+  const nativeUpdate=$('androidUpdateBtn');
+  if(nativeUpdate){nativeUpdate.style.display='inline-flex';nativeUpdate.onclick=openSkorskalUpdates;}
+}
 $('rosterSearch').addEventListener('input',renderRoster);
 $('rosterYear').addEventListener('change',renderRoster);
 $('rosterClass').addEventListener('change',renderRoster);

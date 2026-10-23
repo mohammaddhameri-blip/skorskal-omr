@@ -5,7 +5,7 @@
   <meta name="theme-color" content="#102739"><meta name="description" content="skorskal: mobile OMR grading for 40-question A4 sheets. All marking stays on this device.">
   <link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <script>try{document.documentElement.dataset.theme=localStorage.getItem('skorskal_theme')==='dark'?'dark':'light'}catch(e){document.documentElement.dataset.theme='light'}</script>
-  <link rel="stylesheet" href="style.css?v=20261023-roster"><title>skorskal · OMR Scanner</title>
+  <link rel="stylesheet" href="style.css?v=20261023-attendance"><title>skorskal · OMR Scanner</title>
 </head>
 <body>
 <header class="app-header">
@@ -76,19 +76,27 @@
       <div class="card slim"><h3>Saved answer keys</h3><div id="savedKeys" class="list-container"></div></div>
     </section>
     <section class="page" id="page-roster">
-      <div class="page-heading"><div><span class="eyebrow">OFFICIAL 2026 ROSTER</span><h1>Class lists</h1><p>Read-only pupil records, managed by the Skorskal publisher. No local roster imports or changes.</p></div></div>
-      <div class="card form-card">
+      <div class="page-heading"><div><span class="eyebrow">OFFICIAL 2026 ROSTER</span><h1>Pupils &amp; attendance</h1><p>Choose a year and class, then untick pupils who are absent. Everyone is present by default.</p></div></div>
+      <div class="card form-card" id="rosterAccessPanel">
         <div class="field-grid"><label>Staff roster access phrase<input id="rosterPassphrase" type="password" autocomplete="off" placeholder="Enter staff roster access phrase"></label></div>
         <div class="key-actions"><button class="btn primary" id="unlockRosterBtn">Unlock 2026 roster</button><button class="btn secondary" id="checkUpdatesBtn">Check for updates ↗</button></div>
-        <p id="rosterImportStatus" class="helper" role="status">Roster locked. Enter the staff access phrase supplied by the Skorskal publisher.</p>
+        <p id="rosterImportStatus" class="helper" role="status">Enter the staff access phrase to display the 2026 pupil names.</p>
       </div>
-      <div class="card slim"><div class="card-head"><h3>Registered pupils · 2026</h3><span id="rosterCount" class="mini-pill">Locked</span></div>
-      <div class="roster-filters" role="group" aria-label="Filter registered pupils">
-        <label>Year<select id="rosterYear"><option value="">All years</option><option value="1">Year 1</option><option value="2">Year 2</option><option value="3">Year 3</option><option value="4">Year 4</option><option value="5">Year 5</option><option value="6">Year 6</option></select></label>
-        <label>Class<select id="rosterClass"><option value="">All classes</option><option value="C">C — Cemerlang</option><option value="G">G — Gemilang</option><option value="T">T — Terbilang</option></select></label>
+      <div class="card slim">
+        <div class="card-head"><h3>Class attendance</h3><span id="rosterCount" class="mini-pill">Locked</span></div>
+        <div class="roster-filters attendance-filters" role="group" aria-label="Select class and attendance date">
+          <label>Year<select id="rosterYear"><option value="1">Year 1</option><option value="2">Year 2</option><option value="3">Year 3</option><option value="4">Year 4</option><option value="5">Year 5</option><option value="6">Year 6</option></select></label>
+          <label>Class<select id="rosterClass"><option value="C">CEMERLANG</option><option value="G">GEMILANG</option><option value="T">TERBILANG</option></select></label>
+          <label>Attendance date<input type="date" id="rosterDate" aria-label="Attendance date"></label>
+        </div>
+        <div class="attendance-summary">
+          <div><strong id="attendancePresent">—</strong><small>Present</small></div>
+          <div><strong id="attendanceAbsent">—</strong><small>Absent</small></div>
+          <button type="button" id="allPresentBtn" class="btn secondary">Mark all present</button>
+        </div>
+        <p class="helper attendance-help">Ticked = present · Unticked = absent. Attendance is saved automatically on this device and never changes the official roster.</p>
+        <div class="attendance-list" id="attendanceList" role="group" aria-label="Pupil attendance checklist"></div>
       </div>
-      <label class="search-field">Search pupils <input type="search" id="rosterSearch" placeholder="Name or examinee number"></label>
-      <div class="scroll-table"><table><thead><tr><th>ID</th><th>Name</th><th>Source</th></tr></thead><tbody id="rosterTable"></tbody></table></div></div>
     </section>
     <section class="page" id="page-results">
       <div class="page-heading"><div><span class="eyebrow">MARKING RECORDS</span><h1>Saved results</h1><p>Results are stored on this device. Export regularly to back them up.</p></div></div>
@@ -99,6 +107,6 @@
   <footer>skorskal© by MrDhameri <span>·</span> A4 <span>·</span> 20/40 questions <span>·</span> v1.4 <span>·</span> On-device marking</footer>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
-<script type="module" src="app.js?v=20261023-apk-updates"></script>
+<script type="module" src="app.js?v=20261023-attendance"></script>
 </body>
 </html>

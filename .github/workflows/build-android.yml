@@ -21,18 +21,17 @@ permissions:
   contents: write
 
 concurrency:
-  group: skorskal-release-${{ github.ref }}
+  group: skorskal-android-release
   cancel-in-progress: false
 
 jobs:
   build-apk:
-    name: Compile APK and publish signed auto-update release
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
       SKORSKAL_BUILD_NUMBER: ${{ github.run_number }}
     steps:
-      - name: Check out Skorskal
+      - name: Check out official Skorskal source
         uses: actions/checkout@v4
 
       - name: Set up Node.js
@@ -40,7 +39,7 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Bundle current Skorskal web assets
+      - name: Bundle latest Skorskal web assets
         run: node android/scripts/prepare-web-assets.mjs
 
       - name: Set up Java 17
@@ -62,55 +61,93 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
-      - name: Compile debug test APK (not for in-place auto updates)
-        run: gradle --no-daemon -p android :app:assembleDebug
-
-      - name: Save test APK artifact
-        uses: actions/upload-artifact@v4
+      - name: Restore publisher signing certificate
+        id: signing-key-cache
+        uses: actions/cache/restore@v4
         with:
-          name: Skorskal-OMR-v0.3.${{ github.run_number }}-DEBUG
-          path: android/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-          retention-days: 30
+          path: ~/.android/skorskal-signing.keystore
+          key: skorskal-stable-signer-v1
 
-      - name: Prepare permanent signing key
-        id: signing
-        env:
-          KEYSTORE_B64: ${{ secrets.SKORSKAL_KEYSTORE_B64 }}
-          SIGNING_PASSWORD: ${{ secrets.SKORSKAL_SIGNING_PASSWORD }}
-        shell: bash
-        run: |
-          if [[ -z "$KEYSTORE_B64" || -z "$SIGNING_PASSWORD" ]]; then
-            echo "Publisher signing secrets are absent: no official release will be published."
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/skorskal.p12"
-          chmod 600 "$RUNNER_TEMP/skorskal.p12"
-          echo "SKORSKAL_SIGNING_KEYSTORE_PATH=$RUNNER_TEMP/skorskal.p12" >> "$GITHUB_ENV"
-          echo "ready=true" >> "$GITHUB_OUTPUT"
-
-      - name: Build release signed with publisher key
-        if: steps.signing.outputs.ready == 'true' && github.ref == 'refs/heads/main'
-        env:
-          SKORSKAL_SIGNING_PASSWORD: ${{ secrets.SKORSKAL_SIGNING_PASSWORD }}
-        shell: bash
-        run: |
-          gradle --no-daemon -p android :app:assembleRelease
-          cp android/app/build/outputs/apk/release/app-release.apk "Skorskal-OMR-v0.3.${GITHUB_RUN_NUMBER}.apk"
-          sha256sum "Skorskal-OMR-v0.3.${GITHUB_RUN_NUMBER}.apk" > "Skorskal-OMR-v0.3.${GITHUB_RUN_NUMBER}.apk.sha256"
-
-      - name: Publish official GitHub Release for in-app updates
-        if: steps.signing.outputs.ready == 'true' && github.ref == 'refs/heads/main'
+      - name: Verify or create publisher certificate
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          tag="v0.3.${GITHUB_RUN_NUMBER}"
-          apk="Skorskal-OMR-${tag}.apk"
-          checksum="${apk}.sha256"
-          if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" "$apk" "$checksum" --clobber
-          else
-            gh release create "$tag" "$apk" "$checksum" --target "$GITHUB_SHA" --title "Skorskal OMR ${tag}" --latest --notes "Official publisher-signed Android APK. Automatic update checks on app launch and manual checks from the ↻ button. The installer always requires Android approval. All releases use the same signing key; never distribute the temporary debug artifact as an upgradable installation."
+          mkdir -p "$HOME/.android"
+          SIGNER="$HOME/.android/skorskal-signing.keystore"
+          if [[ ! -s "$SIGNER" ]]; then
+            NOTES=$(gh release view android-latest --json body --jq '.body' 2>/dev/null || true)
+            if echo "$NOTES" | grep -q '^APK_SIGNER_SHA256='; then
+              echo "::error::The previous signing certificate is missing from cache. Do not publish an APK with a new signing key. Recover the original keystore first."
+              exit 1
+            fi
+            keytool -genkeypair -noprompt -storetype PKCS12 \
+              -keystore "$SIGNER" -storepass android -keypass android \
+              -alias skorskal -keyalg RSA -keysize 3072 -validity 10000 \
+              -dname "CN=Skorskal, OU=Education, O=MrDhameri, C=MY"
           fi
+          test -s "$SIGNER"
+          SIGNER_HASH=$(keytool -list -v -keystore "$SIGNER" -storepass android -alias skorskal \
+            | sed -n 's/^[[:space:]]*SHA256: //p' | head -n1 | tr -d ':' | tr '[:lower:]' '[:upper:]')
+          if [[ ! "$SIGNER_HASH" =~ ^[A-F0-9]{64}$ ]]; then
+            echo "::error::Publisher signing certificate fingerprint unavailable"
+            exit 1
+          fi
+          echo "APK_SIGNER_SHA256=$SIGNER_HASH" >> "$GITHUB_ENV"
+          echo "Publisher fingerprint: $SIGNER_HASH"
+
+      - name: Cache certificate for all future updates
+        if: steps.signing-key-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.android/skorskal-signing.keystore
+          key: skorskal-stable-signer-v1
+
+      - name: Build the publisher-signed, non-debuggable release APK
+        run: gradle --no-daemon -p android :app:assembleRelease
+
+      - name: Verify the APK was signed by the permanent publisher certificate
+        shell: bash
+        run: |
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$APK" > apk-signature.txt
+          APK_HASH=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' apk-signature.txt | head -n1 | tr '[:lower:]' '[:upper:]')
+          if [[ "$APK_HASH" != "$APK_SIGNER_SHA256" ]]; then
+            echo "::error::Certificate differs from publisher key. Update cancelled."
+            exit 1
+          fi
+          cp "$APK" Skorskal-OMR.apk
+          sha256sum Skorskal-OMR.apk > Skorskal-OMR.apk.sha256
+
+      - name: Upload APK as a GitHub Actions artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Skorskal-OMR-Android-APK
+          path: Skorskal-OMR.apk
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Publish stable update channel (as prerelease)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          TAG=android-latest
+          CODE=$((300000 + GITHUB_RUN_NUMBER))
+          VERSION="0.3.${GITHUB_RUN_NUMBER}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" Skorskal-OMR.apk Skorskal-OMR.apk.sha256 --clobber
+          else
+            gh release create "$TAG" Skorskal-OMR.apk Skorskal-OMR.apk.sha256 \
+              --target "$GITHUB_SHA" --title "Skorskal Android — Latest APK" \
+              --notes "Uploading update metadata…" --prerelease
+          fi
+          # Publish the new version marker last, once BOTH downloadable files exist.
+          gh release edit "$TAG" --notes "APK_VERSION_CODE=${CODE}
+          APK_VERSION_NAME=${VERSION}
+          APK_SIGNER_SHA256=${APK_SIGNER_SHA256}
+
+          Official Skorskal APK from MrDhameri's GitHub repository.
+          Android checks for an update when Skorskal launches, and teachers can
+          tap the ↻ update button. The download is SHA-256 verified.
+          Android asks for approval before installing; saved records remain local."

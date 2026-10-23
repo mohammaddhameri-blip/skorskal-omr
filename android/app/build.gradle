@@ -14,16 +14,14 @@ android {
         versionCode 300000 + skorskalVersionPatch
         versionName "0.3.${skorskalVersionPatch}"
     }
+    // The same publisher signing certificate is restored for every GitHub
+    // release. It is never committed to the public repository.
     signingConfigs {
         skorskalRelease {
-            def source = System.getenv('SKORSKAL_SIGNING_KEYSTORE_PATH')
-            if (source) {
-                storeFile file(source)
-                storePassword System.getenv('SKORSKAL_SIGNING_PASSWORD')
-                keyAlias 'skorskal'
-                keyPassword System.getenv('SKORSKAL_SIGNING_PASSWORD')
-                storeType 'pkcs12'
-            }
+            storeFile file((System.getenv('HOME') ?: '/home/runner') + '/.android/skorskal-signing.keystore')
+            storePassword 'android'
+            keyAlias 'skorskal'
+            keyPassword 'android'
         }
     }
     buildTypes {

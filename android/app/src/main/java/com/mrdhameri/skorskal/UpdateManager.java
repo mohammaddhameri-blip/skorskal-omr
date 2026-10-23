@@ -6,9 +6,7 @@ import android.content.ClipData;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
-import android.os.Environment;
 import android.provider.Settings;
-import android.content.SharedPreferences;
 import android.widget.Toast;
 
 import androidx.core.content.FileProvider;
@@ -30,24 +28,21 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * Checks publisher-controlled GitHub Releases, verifies the SHA-256 checksum,
  * then hands the APK to Android's installer. Never silently installs an APK.
- * Only non-prerelease (stable) GitHub Releases are offered.
+ * Uses the same pinned android-latest release mechanism as STEM Battleship.
  */
 final class UpdateManager {
     private static final String API =
-        "https://api.github.com/repos/mohammaddhameri-blip/skorskal-omr/releases/latest";
+        "https://api.github.com/repos/mohammaddhameri-blip/skorskal-omr/releases/tags/android-latest";
     private static final String ASSET_PREFIX =
         "https://github.com/mohammaddhameri-blip/skorskal-omr/releases/download/";
-    private static final long CHECK_INTERVAL_MS = 24L * 60 * 60 * 1000;
     private static final long MAX_APK_BYTES = 150L * 1024 * 1024;
     private final Activity activity;
-    private final SharedPreferences preferences;
     private final AtomicBoolean busy = new AtomicBoolean(false);
     private File pendingApk;
     private boolean waitingForInstallPermission;
 
     UpdateManager(Activity activity) {
         this.activity = activity;
-        this.preferences = activity.getSharedPreferences("skorskal-updates", Activity.MODE_PRIVATE);
     }
 
     void checkForUpdates(boolean manual) {
@@ -55,28 +50,27 @@ final class UpdateManager {
             if (manual) toast("Skorskal is already checking or downloading an update.");
             return;
         }
-        if (!manual && System.currentTimeMillis() - preferences.getLong("lastCheck", 0) < CHECK_INTERVAL_MS) {
-            busy.set(false);
-            return;
-        }
         new Thread(() -> {
             try {
                 JSONObject release = new JSONObject(new String(downloadBytes(API, 512 * 1024), StandardCharsets.UTF_8));
-                if (release.optBoolean("draft") || release.optBoolean("prerelease")) throw new Exception("No stable release is available.");
-                String tag = release.optString("tag_name", "");
-                String latest = tag.startsWith("v") ? tag.substring(1) : tag;
+                if (release.optBoolean("draft") || !"android-latest".equals(release.optString("tag_name")))
+                    throw new Exception("Official update release is unavailable.");
+                String latest = note(release.optString("body"), "APK_VERSION_NAME");
+                String codeText = note(release.optString("body"), "APK_VERSION_CODE");
+                if (!codeText.matches("[0-9]{1,9}"))
+                    throw new Exception("The latest release has no valid version metadata yet.");
+                long publishedCode = Long.parseLong(codeText);
+                long currentCode = installedVersionCode();
                 String current = installedVersion();
-                if (!latest.matches("\\d+\\.\\d+\\.\\d+")) throw new Exception("Unrecognised GitHub release version.");
-                preferences.edit().putLong("lastCheck", System.currentTimeMillis()).apply();
-                if (compareVersions(latest, current) <= 0) {
+                if (publishedCode <= currentCode) {
                     if (manual) ui(() -> new AlertDialog.Builder(activity)
                         .setTitle("Skorskal is up to date")
-                        .setMessage("Installed version: " + current + "\nNo newer stable APK is available.")
+                        .setMessage("Installed version: " + current + "\nNo newer APK is available.")
                         .setPositiveButton("OK", null).show());
                     return;
                 }
                 JSONArray assets = release.optJSONArray("assets");
-                String apkName = "Skorskal-OMR-" + tag + ".apk";
+                String apkName = "Skorskal-OMR.apk";
                 String checksumName = apkName + ".sha256";
                 String apkUrl = null, checksumUrl = null;
                 if (assets != null) for (int i = 0; i < assets.length(); i++) {
@@ -89,7 +83,7 @@ final class UpdateManager {
                 if (apkUrl == null || checksumUrl == null) {
                     throw new Exception("This release has no signed APK and checksum yet.");
                 }
-                if (!isPublisherAsset(apkUrl, tag) || !isPublisherAsset(checksumUrl, tag))
+                if (!isPublisherAsset(apkUrl, "android-latest") || !isPublisherAsset(checksumUrl, "android-latest"))
                     throw new Exception("Update does not originate from the Skorskal publisher's release.");
                 String chosenApk = apkUrl, chosenSum = checksumUrl;
                 ui(() -> new AlertDialog.Builder(activity)
@@ -210,19 +204,18 @@ final class UpdateManager {
         return activity.getPackageManager().getPackageInfo(activity.getPackageName(), 0).versionName;
     }
 
-    private static int compareVersions(String a, String b) {
-        String[] lhs = a.split("\\."), rhs = b.split("\\.");
-        for (int i = 0; i < 3; i++) {
-            int av = i < lhs.length ? parsePart(lhs[i]) : 0;
-            int bv = i < rhs.length ? parsePart(rhs[i]) : 0;
-            if (av != bv) return Integer.compare(av, bv);
-        }
-        return 0;
+    private long installedVersionCode() throws Exception {
+        android.content.pm.PackageInfo info =
+            activity.getPackageManager().getPackageInfo(activity.getPackageName(), 0);
+        return Build.VERSION.SDK_INT >= 28 ? info.getLongVersionCode() : info.versionCode;
     }
 
-    private static int parsePart(String value) {
-        try { return Integer.parseInt(value.replaceAll("[^0-9].*$", "")); }
-        catch (Exception error) { return 0; }
+    private static String note(String body, String key) {
+        if (body == null) return "";
+        for (String line : body.split("\\r?\\n")) {
+            if (line.startsWith(key + "=")) return line.substring(key.length() + 1).trim();
+        }
+        return "";
     }
 
     private static HttpURLConnection connect(String url) throws Exception {

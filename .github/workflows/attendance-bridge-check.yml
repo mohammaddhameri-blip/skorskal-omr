@@ -1,0 +1,27 @@
+name: Attendance Bridge syntax
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app.js'
+      - 'attendance-bridge.js'
+      - 'index.html'
+      - 'sw.js'
+      - '.github/workflows/attendance-bridge-check.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate bridge scripts
+        run: |
+          node --check app.js
+          node --check attendance-bridge.js
+          node --check sw.js
+          node -e "const fs=require('fs'); const html=fs.readFileSync('index.html','utf8'); for(const id of ['bridgePairCode','bridgeSendAttendance','bridgeSendStatus']) if(!html.includes('id='+String.fromCharCode(34)+id+String.fromCharCode(34))) process.exit(1)"

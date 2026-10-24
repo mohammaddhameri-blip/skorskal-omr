@@ -427,7 +427,11 @@ $('bridgeForgetPair').addEventListener('click',()=>{
 $('bridgeSendAttendance').addEventListener('click',async()=>{
   const button=$('bridgeSendAttendance');
   if(!rosterLoaded){bridgeStatus.textContent='Unlock your official 2026 roster first.';return}
-  let pair;try{pair=parsePairing(bridgePairField.value)}catch(e){bridgeStatus.textContent=e.message;return}
+  let receivers;try{
+    receivers=[...new Set(bridgePairField.value.split(/[\\n\\r,;]+/).map(x=>x.trim()).filter(Boolean))];
+    if(!receivers.length||receivers.length>3)throw new Error('Enter 1–3 device pairing codes, one per line.');
+    receivers.forEach(parsePairing);
+  }catch(e){bridgeStatus.textContent=e.message;return}
   const selected=selectedAttendance();
   if(!selected.pupils.length){bridgeStatus.textContent='No pupils in the selected class.';return}
   const summary={
@@ -443,9 +447,14 @@ $('bridgeSendAttendance').addEventListener('click',async()=>{
   if(!confirm('Send attendance for '+selected.year+' '+summary.className+' ('+selected.date+')?\\n'+(summary.pupils.length-absentCount)+' present, '+absentCount+' absent. This does NOT submit to MOEIS.'))return;
   button.disabled=true;bridgeStatus.textContent='Encrypting and sending privately…';
   try{
-    const result=await submitAttendance(bridgePairField.value,summary);
-    try{sessionStorage.setItem('skorskal_bridge_pair_session',bridgePairField.value.trim())}catch{}
-    bridgeStatus.textContent='Attendance delivered to private queue. Check the work-PC notification (normally within one minute). Expires in '+result.expires_in_hours+' hours.';
+    let delivered=0,failures=[];
+    for(let i=0;i<receivers.length;i++){
+      bridgeStatus.textContent='Encrypting and sending to receiver '+(i+1)+' of '+receivers.length+'…';
+      try{await submitAttendance(receivers[i],summary);delivered++}
+      catch(e){failures.push('Receiver '+(i+1)+': '+e.message)}
+    }
+    if(delivered)try{sessionStorage.setItem('skorskal_bridge_pair_session',bridgePairField.value.trim())}catch{}
+    bridgeStatus.textContent=delivered+' of '+receivers.length+' devices queued. Notifications arrive on the PC (about 1 min) or master Android APK (background check about 15 min, possibly later). '+(failures.length?'Failed: '+failures.join('; '):'No MOEIS submission performed.');
   }catch(e){bridgeStatus.textContent='Unable to send: '+e.message}
   finally{button.disabled=false}
 });

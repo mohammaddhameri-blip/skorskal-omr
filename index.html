@@ -98,7 +98,7 @@
         <div class="card form-card" id="attendanceBridgePanel" style="margin:12px 0;padding:14px;background:var(--surface,#f2f5f1);">
           <div class="card-head"><h3>SMADBOD Attendance Bridge</h3><span class="mini-pill">Private work PC</span></div>
           <p class="helper">Send this class's attendance securely to your own Chrome/Edge helper. The helper opens MOEIS for your review; it never signs in or submits attendance.</p>
-          <div class="field-grid"><label>Work-PC pairing code <input type="password" id="bridgePairCode" autocomplete="off" spellcheck="false" placeholder="Paste the SB1 pairing code from your extension"></label></div>
+          <div class="field-grid"><label>Private receiver pairing codes (PC and/or master phone APK)<textarea id="bridgePairCode" rows="3" autocomplete="off" spellcheck="false" placeholder="Paste one SB1 pairing code per line — PC on line 1, phone on line 2" style="width:100%;min-height:84px;font-family:monospace;overflow-wrap:anywhere"></textarea></label></div>
           <div class="key-actions">
             <button type="button" class="btn primary" id="bridgeSendAttendance">🔔 Send to work PC</button>
             <button type="button" class="btn secondary" id="bridgeForgetPair">Forget pairing</button>

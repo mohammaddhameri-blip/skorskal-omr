@@ -1,5 +1,5 @@
-const CACHE='skorskal-omr-v20261024-bridge';
-const FILES=['./','./index.html','./style.css?v=20261023-attendance','./app.js?v=20261024-bridge-v1','./attendance-bridge.js','./vision.js','./workbook.js','./roster-2026.json','./template.json','./assets/icon.svg','./assets/icon-192.png','./assets/icon-512.png','./assets/sheet-preview.png','./Skorskal_A4_OMR_40.pdf'];
+const CACHE='skorskal-omr-v20261025-exam-only';
+const FILES=['./','./index.html','./style.css?v=20261023-attendance','./app.js?v=20261025-exam-only','./vision.js','./workbook.js','./roster-2026.json','./template.json','./assets/icon.svg','./assets/icon-192.png','./assets/icon-512.png','./assets/sheet-preview.png','./Skorskal_A4_OMR_40.pdf'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(FILES)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith('skorskal-omr-')&&key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',event=>{

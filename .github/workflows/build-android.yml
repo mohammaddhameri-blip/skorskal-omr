@@ -7,7 +7,6 @@ on:
     paths:
       - 'android/**'
       - 'app.js'
-      - 'attendance-bridge.js'
       - 'index.html'
       - 'style.css'
       - 'vision.js'

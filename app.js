@@ -1,12 +1,11 @@
 import {imageToPixels,findAnchors,straighten,analyze} from './vision.js';
 import {resultsCSV,createRosterWorkbook} from './workbook.js';
-import {submitAttendance,parsePairing} from './attendance-bridge.js';
 const $=id=>document.getElementById(id),all=s=>[...document.querySelectorAll(s)];
 const yearChoices=['1','2','3','4','5','6'];
 const subjects={'00':'Pendidikan Muzik (proposed)','01':'Bahasa Melayu','02':'Bahasa Inggeris','03':'Mathematics (proposed)','04':'Science (proposed)','05':'Pendidikan Islam (proposed)','06':'Pendidikan Moral (proposed)','07':'Sejarah (proposed)','08':'RBT (proposed)','09':'Pendidikan Seni Visual (proposed)','10':'PJPK (proposed)'};
 const load=(key,fallback)=>{try{return JSON.parse(localStorage.getItem(`skorskal_${key}`))||fallback;}catch{return fallback;}};
 const persist=(key,value)=>localStorage.setItem(`skorskal_${key}`,JSON.stringify(value));
-let template,keys=load('keys',{}),people=[],rosterLoaded=false,records=load('results',[]),attendance=load('attendance_2026',{}),workCanvas=null,corners=null,warp=null,scanned=null,current=null,
+let template,keys=load('keys',{}),people=[],rosterLoaded=false,records=load('results',[]),workCanvas=null,corners=null,warp=null,scanned=null,current=null,
   stream=null,adjusting=false,selectedCorner=-1,sample=false,imageSource=null,workbookBuffer=null,workbookFileName='';
 let toastTimer;
 // Theme preference is local to this browser / APK, independent from exam records.
@@ -325,139 +324,26 @@ if(window.SkorskalAndroid?.checkForUpdates){
   const nativeUpdate=$('androidUpdateBtn');
   if(nativeUpdate){nativeUpdate.style.display='inline-flex';nativeUpdate.onclick=openSkorskalUpdates;}
 }
-// Attendance is a teacher-owned, device-local record. Only absent IDs are stored.
-// The encrypted official roster cannot be edited through attendance controls.
+// The Pupils tab is a read-only OMR roster lookup, not an attendance app.
 const classLabels={C:'CEMERLANG',G:'GEMILANG',T:'TERBILANG'};
-function attendanceDateToday(){
-  const now=new Date();
-  return String(now.getFullYear())+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
-}
-function selectedAttendance(){
-  const date=$('rosterDate').value||attendanceDateToday();
-  const year=$('rosterYear').value,cls=$('rosterClass').value;
-  const pupils=people.filter(p=>p.year===year&&p.classCode===cls)
-    .sort((a,b)=>Number(a.examNo)-Number(b.examNo)||a.name.localeCompare(b.name));
-  const sessionKey=date+'|'+year+'|'+cls;
-  const absent=new Set(Array.isArray(attendance[sessionKey])?attendance[sessionKey]:[]);
-  return {date,year,cls,pupils,sessionKey,absent};
-}
-// Absence explanations are optional, teacher-entered notes; official MOEIS codes remain authoritative.
-let attendanceReasons=load('attendance_reasons_2026',{});
-function reasonKey(sessionKey,pupilId){return sessionKey+'|'+pupilId;}
-function saveAttendance(sessionKey,absent){
-  if(absent.size)attendance[sessionKey]=[...absent].sort();
-  else delete attendance[sessionKey];
-  persist('attendance_2026',attendance);
-}
-for(const id of ['rosterYear','rosterClass','rosterDate'])$(id).addEventListener('change',renderRoster);
-$('allPresentBtn').onclick=()=>{
-  if(!rosterLoaded)return;
-  const {sessionKey,absent}=selectedAttendance();
-  if(!absent.size){toast('Everyone is already marked present.');return;}
-  if(!confirm('Mark all pupils present for this class and date?'))return;
-  saveAttendance(sessionKey,new Set());
-  renderRoster();toast('All pupils marked present.');
-};
+for(const id of ['rosterYear','rosterClass'])$(id).addEventListener('change',renderRoster);
 function renderRoster(){
-  const list=$('attendanceList');
-  list.replaceChildren();
-  const count=$('rosterCount'),present=$('attendancePresent'),absentCount=$('attendanceAbsent');
-  if(!rosterLoaded){
-    count.textContent='Locked';present.textContent='—';absentCount.textContent='—';
-    $('allPresentBtn').disabled=true;
-    list.innerHTML='<p class="attendance-empty">Unlock the official 2026 roster to view pupil names.</p>';
-    return;
-  }
-  const {pupils,sessionKey,absent,year,cls}=selectedAttendance();
-  $('allPresentBtn').disabled=!pupils.length||!absent.size;
-  const presentNum=pupils.filter(p=>!absent.has(personId(p.year,p.classCode,p.examNo))).length;
-  count.textContent='Year '+year+' · '+classLabels[cls]+' · '+pupils.length+' pupils';
-  present.textContent=presentNum;
-  absentCount.textContent=pupils.length-presentNum;
-  if(!pupils.length){
-    list.innerHTML='<p class="attendance-empty">No pupils registered for the selected year and class.</p>';
-    return;
-  }
-  for(const pupil of pupils){
-    const pupilKey=personId(pupil.year,pupil.classCode,pupil.examNo);
-    const checked=!absent.has(pupilKey);
-    const label=document.createElement('label');
-    label.className='attendance-pupil'+(checked?'':' is-absent');
-    const checkbox=document.createElement('input');
-    checkbox.type='checkbox';checkbox.checked=checked;checkbox.value=pupilKey;
-    checkbox.setAttribute('aria-label',pupil.name+' present');
-    checkbox.addEventListener('change',()=>{
-      const changed=new Set(Array.isArray(attendance[sessionKey])?attendance[sessionKey]:[]);
-      if(checkbox.checked){changed.delete(pupilKey);delete attendanceReasons[reasonKey(sessionKey,pupilKey)];persist('attendance_reasons_2026',attendanceReasons);}
-      else changed.add(pupilKey);
-      try{saveAttendance(sessionKey,changed);renderRoster();}
-      catch(e){checkbox.checked=!checkbox.checked;toast('Attendance could not be saved. Check device storage.');}
-    });
-    const number=document.createElement('span');number.className='attendance-no';number.textContent=pupil.examNo;
-    const name=document.createElement('strong');name.className='attendance-name';name.textContent=pupil.name;
-    const status=document.createElement('span');status.className='attendance-status';status.textContent=checked?'Present':'Absent';
-    label.append(checkbox,number,name,status);
-    list.appendChild(label);
-    if(!checked){
-      const input=document.createElement('input');
-      input.type='text';input.maxLength=140;
-      input.className='attendance-reason';
-      input.value=attendanceReasons[reasonKey(sessionKey,pupilKey)]||'';
-      input.placeholder='Optional absence reason (check official MOEIS category)';
-      input.setAttribute('aria-label','Absence reason for '+pupil.name);
-      input.style.cssText='display:block;width:min(100%,600px);margin:2px 0 11px 18px;padding:8px;border:1px solid #b4c1b5;border-radius:8px;';
-      input.addEventListener('input',()=>{
-        const value=input.value.trim();
-        if(value)attendanceReasons[reasonKey(sessionKey,pupilKey)]=value;
-        else delete attendanceReasons[reasonKey(sessionKey,pupilKey)];
-        persist('attendance_reasons_2026',attendanceReasons);
-      });
-      list.appendChild(input);
-    }
-  }
+ const list=$('attendanceList');list.replaceChildren();
+ const count=$('rosterCount');
+ if(!rosterLoaded){count.textContent='Locked';list.textContent='Unlock the official 2026 roster to view examination candidates.';return;}
+ const year=$('rosterYear').value,cls=$('rosterClass').value;
+ const pupils=people.filter(p=>p.year===year&&p.classCode===cls)
+   .sort((a,b)=>Number(a.examNo)-Number(b.examNo)||a.name.localeCompare(b.name));
+ count.textContent='Year '+year+' · '+classLabels[cls]+' · '+pupils.length+' examinees';
+ for(const pupil of pupils){
+   const line=document.createElement('div');line.className='attendance-pupil';
+   line.style.cssText='display:flex;align-items:center;gap:16px;padding:12px;';
+   const number=document.createElement('span');number.className='attendance-no';number.textContent=pupil.examNo;
+   const name=document.createElement('strong');name.className='attendance-name';name.textContent=pupil.name;
+   line.append(number,name);list.append(line);
+ }
+ if(!pupils.length)list.textContent='No candidates for the selected year and class.';
 }
-
-// A pairing code is retained for this browser tab/session only, not in the public repo.
-const bridgePairField=$('bridgePairCode'),bridgeStatus=$('bridgeSendStatus');
-try{bridgePairField.value=sessionStorage.getItem('skorskal_bridge_pair_session')||'';}catch{}
-$('bridgeForgetPair').addEventListener('click',()=>{
-  bridgePairField.value='';try{sessionStorage.removeItem('skorskal_bridge_pair_session')}catch{}
-  bridgeStatus.textContent='Pairing cleared from this session.';
-});
-$('bridgeSendAttendance').addEventListener('click',async()=>{
-  const button=$('bridgeSendAttendance');
-  if(!rosterLoaded){bridgeStatus.textContent='Unlock your official 2026 roster first.';return}
-  let receivers;try{
-    receivers=[...new Set(bridgePairField.value.split(/[\n\r,;]+/).map(x=>x.trim()).filter(Boolean))];
-    if(!receivers.length||receivers.length>3)throw new Error('Enter 1–3 device pairing codes, one per line.');
-    receivers.forEach(parsePairing);
-  }catch(e){bridgeStatus.textContent=e.message;return}
-  const selected=selectedAttendance();
-  if(!selected.pupils.length){bridgeStatus.textContent='No pupils in the selected class.';return}
-  const summary={
-    schema:'smadbod.attendance.v1',date:selected.date,year:selected.year,
-    classCode:selected.cls,className:classLabels[selected.cls],
-    pupils:selected.pupils.map(p=>{
-      const id=personId(p.year,p.classCode,p.examNo),present=!selected.absent.has(id);
-      return {id,examNo:String(p.examNo),name:p.name,present,
-        reason:present?'':(attendanceReasons[reasonKey(selected.sessionKey,id)]||'')};
-    }),preparedAt:new Date().toISOString()
-  };
-  const absentCount=summary.pupils.filter(p=>!p.present).length;
-  if(!confirm('Send attendance for '+selected.year+' '+summary.className+' ('+selected.date+')?\\n'+(summary.pupils.length-absentCount)+' present, '+absentCount+' absent. This does NOT submit to MOEIS.'))return;
-  button.disabled=true;bridgeStatus.textContent='Encrypting and sending privately…';
-  try{
-    let delivered=0,failures=[];
-    for(let i=0;i<receivers.length;i++){
-      bridgeStatus.textContent='Encrypting and sending to receiver '+(i+1)+' of '+receivers.length+'…';
-      try{await submitAttendance(receivers[i],summary);delivered++}
-      catch(e){failures.push('Receiver '+(i+1)+': '+e.message)}
-    }
-    if(delivered)try{sessionStorage.setItem('skorskal_bridge_pair_session',bridgePairField.value.trim())}catch{}
-    bridgeStatus.textContent=delivered+' of '+receivers.length+' devices queued. Notifications arrive on the PC (about 1 min) or master Android APK (background check about 15 min, possibly later). '+(failures.length?'Failed: '+failures.join('; '):'No MOEIS submission performed.');
-  }catch(e){bridgeStatus.textContent='Unable to send: '+e.message}
-  finally{button.disabled=false}
-});
 
 // Results and backups
 function renderResults(){const tb=$('resultsTable');tb.innerHTML='';$('resultsCount').textContent=`${records.length} saved`;
@@ -470,7 +356,7 @@ function renderResults(){const tb=$('resultsTable');tb.innerHTML='';$('resultsCo
 }
 $('exportResultsBtn').onclick=()=>{download(resultsCSV(records),'Skorskal_Results.csv','text/csv;charset=utf-8');toast('CSV exported.');};
 $('backupBtn').onclick=()=>{
-  download(JSON.stringify({app:'skorskal',version:3,keys,records,attendance},null,2),'Skorskal_Backup.json','application/json');
+  download(JSON.stringify({app:'skorskal',version:4,keys,records},null,2),'Skorskal_Backup.json','application/json');
   toast('Keys and marking results backed up. Official roster is never exported in backups.');
 };
 $('restoreInput').addEventListener('change',async e=>{
@@ -481,9 +367,8 @@ $('restoreInput').addEventListener('change',async e=>{
       throw new Error('Not a valid Skorskal backup.');
     if(!confirm('Restore saved keys and results? The official 2026 roster cannot be replaced.'))return;
     keys=backup.keys;records=backup.records;
-    if(backup.attendance && typeof backup.attendance==='object' && !Array.isArray(backup.attendance))attendance=backup.attendance;
-    persist('keys',keys);persist('results',records);persist('attendance_2026',attendance);
-    renderResults();renderKeys();renderRoster();toast('Saved keys, results and attendance restored; official roster unchanged.');
+    persist('keys',keys);persist('results',records);
+    renderResults();renderKeys();renderRoster();toast('Exam keys and results restored; official roster unchanged.');
   }catch(err){toast(err.message);}
   finally{e.target.value='';}
 });
@@ -496,8 +381,7 @@ $('exportWorkbookBtn').onclick=()=>{
 async function init(){try{
   template=await fetch('./template.json').then(r=>{if(!r.ok)throw new Error('Template not found.');return r.json();});
   if(Object.keys(template.questions).length!==40||Object.keys(template.anchors).length!==4)throw new Error('OMR calibration file invalid.');
-  seedMenus();$('rosterYear').value='2';$('rosterClass').value='C';$('rosterDate').value=attendanceDateToday();
-  if(new URLSearchParams(location.search).get('attendance')==='1')setTab('roster');
+  seedMenus();$('rosterYear').value='2';$('rosterClass').value='C';
   renderKeys();renderRoster();renderResults();
   // Session-only unlock avoids saving a plaintext roster or persistent passphrase.
   let phrase='';try{phrase=sessionStorage.getItem('skorskal_staff_phrase_2026')||'';}catch{}

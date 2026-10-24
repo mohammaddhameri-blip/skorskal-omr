@@ -428,7 +428,7 @@ $('bridgeSendAttendance').addEventListener('click',async()=>{
   const button=$('bridgeSendAttendance');
   if(!rosterLoaded){bridgeStatus.textContent='Unlock your official 2026 roster first.';return}
   let receivers;try{
-    receivers=[...new Set(bridgePairField.value.split(/[\\n\\r,;]+/).map(x=>x.trim()).filter(Boolean))];
+    receivers=[...new Set(bridgePairField.value.split(/[\n\r,;]+/).map(x=>x.trim()).filter(Boolean))];
     if(!receivers.length||receivers.length>3)throw new Error('Enter 1–3 device pairing codes, one per line.');
     receivers.forEach(parsePairing);
   }catch(e){bridgeStatus.textContent=e.message;return}

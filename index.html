@@ -95,6 +95,16 @@
           <button type="button" id="allPresentBtn" class="btn secondary">Mark all present</button>
         </div>
         <p class="helper attendance-help">Ticked = present · Unticked = absent. Attendance is saved automatically on this device and never changes the official roster.</p>
+        <div class="card form-card" id="attendanceBridgePanel" style="margin:12px 0;padding:14px;background:var(--surface,#f2f5f1);">
+          <div class="card-head"><h3>SMADBOD Attendance Bridge</h3><span class="mini-pill">Private work PC</span></div>
+          <p class="helper">Send this class's attendance securely to your own Chrome/Edge helper. The helper opens MOEIS for your review; it never signs in or submits attendance.</p>
+          <div class="field-grid"><label>Work-PC pairing code <input type="password" id="bridgePairCode" autocomplete="off" spellcheck="false" placeholder="Paste the SB1 pairing code from your extension"></label></div>
+          <div class="key-actions">
+            <button type="button" class="btn primary" id="bridgeSendAttendance">🔔 Send to work PC</button>
+            <button type="button" class="btn secondary" id="bridgeForgetPair">Forget pairing</button>
+          </div>
+          <p id="bridgeSendStatus" class="helper" role="status">Not connected. Pair with the SMADBOD Chrome/Edge extension first.</p>
+        </div>
         <div class="attendance-list" id="attendanceList" role="group" aria-label="Pupil attendance checklist"></div>
       </div>
     </section>
@@ -107,6 +117,6 @@
   <footer>skorskal© by MrDhameri <span>·</span> A4 <span>·</span> 20/40 questions <span>·</span> v1.4 <span>·</span> On-device marking</footer>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
-<script type="module" src="app.js?v=20261023-attendance"></script>
+<script type="module" src="app.js?v=20261024-bridge-v1"></script>
 </body>
 </html>

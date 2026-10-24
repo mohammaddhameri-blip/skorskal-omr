@@ -1,5 +1,6 @@
 import {imageToPixels,findAnchors,straighten,analyze} from './vision.js';
 import {resultsCSV,createRosterWorkbook} from './workbook.js';
+import {submitAttendance,parsePairing} from './attendance-bridge.js';
 const $=id=>document.getElementById(id),all=s=>[...document.querySelectorAll(s)];
 const yearChoices=['1','2','3','4','5','6'];
 const subjects={'00':'Pendidikan Muzik (proposed)','01':'Bahasa Melayu','02':'Bahasa Inggeris','03':'Mathematics (proposed)','04':'Science (proposed)','05':'Pendidikan Islam (proposed)','06':'Pendidikan Moral (proposed)','07':'Sejarah (proposed)','08':'RBT (proposed)','09':'Pendidikan Seni Visual (proposed)','10':'PJPK (proposed)'};
@@ -340,6 +341,9 @@ function selectedAttendance(){
   const absent=new Set(Array.isArray(attendance[sessionKey])?attendance[sessionKey]:[]);
   return {date,year,cls,pupils,sessionKey,absent};
 }
+// Absence explanations are optional, teacher-entered notes; official MOEIS codes remain authoritative.
+let attendanceReasons=load('attendance_reasons_2026',{});
+function reasonKey(sessionKey,pupilId){return sessionKey+'|'+pupilId;}
 function saveAttendance(sessionKey,absent){
   if(absent.size)attendance[sessionKey]=[...absent].sort();
   else delete attendance[sessionKey];
@@ -384,7 +388,8 @@ function renderRoster(){
     checkbox.setAttribute('aria-label',pupil.name+' present');
     checkbox.addEventListener('change',()=>{
       const changed=new Set(Array.isArray(attendance[sessionKey])?attendance[sessionKey]:[]);
-      if(checkbox.checked)changed.delete(pupilKey);else changed.add(pupilKey);
+      if(checkbox.checked){changed.delete(pupilKey);delete attendanceReasons[reasonKey(sessionKey,pupilKey)];persist('attendance_reasons_2026',attendanceReasons);}
+      else changed.add(pupilKey);
       try{saveAttendance(sessionKey,changed);renderRoster();}
       catch(e){checkbox.checked=!checkbox.checked;toast('Attendance could not be saved. Check device storage.');}
     });
@@ -393,8 +398,57 @@ function renderRoster(){
     const status=document.createElement('span');status.className='attendance-status';status.textContent=checked?'Present':'Absent';
     label.append(checkbox,number,name,status);
     list.appendChild(label);
+    if(!checked){
+      const input=document.createElement('input');
+      input.type='text';input.maxLength=140;
+      input.className='attendance-reason';
+      input.value=attendanceReasons[reasonKey(sessionKey,pupilKey)]||'';
+      input.placeholder='Optional absence reason (check official MOEIS category)';
+      input.setAttribute('aria-label','Absence reason for '+pupil.name);
+      input.style.cssText='display:block;width:min(100%,600px);margin:2px 0 11px 18px;padding:8px;border:1px solid #b4c1b5;border-radius:8px;';
+      input.addEventListener('input',()=>{
+        const value=input.value.trim();
+        if(value)attendanceReasons[reasonKey(sessionKey,pupilKey)]=value;
+        else delete attendanceReasons[reasonKey(sessionKey,pupilKey)];
+        persist('attendance_reasons_2026',attendanceReasons);
+      });
+      list.appendChild(input);
+    }
   }
 }
+
+// A pairing code is retained for this browser tab/session only, not in the public repo.
+const bridgePairField=$('bridgePairCode'),bridgeStatus=$('bridgeSendStatus');
+try{bridgePairField.value=sessionStorage.getItem('skorskal_bridge_pair_session')||'';}catch{}
+$('bridgeForgetPair').addEventListener('click',()=>{
+  bridgePairField.value='';try{sessionStorage.removeItem('skorskal_bridge_pair_session')}catch{}
+  bridgeStatus.textContent='Pairing cleared from this session.';
+});
+$('bridgeSendAttendance').addEventListener('click',async()=>{
+  const button=$('bridgeSendAttendance');
+  if(!rosterLoaded){bridgeStatus.textContent='Unlock your official 2026 roster first.';return}
+  let pair;try{pair=parsePairing(bridgePairField.value)}catch(e){bridgeStatus.textContent=e.message;return}
+  const selected=selectedAttendance();
+  if(!selected.pupils.length){bridgeStatus.textContent='No pupils in the selected class.';return}
+  const summary={
+    schema:'smadbod.attendance.v1',date:selected.date,year:selected.year,
+    classCode:selected.cls,className:classLabels[selected.cls],
+    pupils:selected.pupils.map(p=>{
+      const id=personId(p.year,p.classCode,p.examNo),present=!selected.absent.has(id);
+      return {id,examNo:String(p.examNo),name:p.name,present,
+        reason:present?'':(attendanceReasons[reasonKey(selected.sessionKey,id)]||'')};
+    }),preparedAt:new Date().toISOString()
+  };
+  const absentCount=summary.pupils.filter(p=>!p.present).length;
+  if(!confirm('Send attendance for '+selected.year+' '+summary.className+' ('+selected.date+')?\\n'+(summary.pupils.length-absentCount)+' present, '+absentCount+' absent. This does NOT submit to MOEIS.'))return;
+  button.disabled=true;bridgeStatus.textContent='Encrypting and sending privately…';
+  try{
+    const result=await submitAttendance(bridgePairField.value,summary);
+    try{sessionStorage.setItem('skorskal_bridge_pair_session',bridgePairField.value.trim())}catch{}
+    bridgeStatus.textContent='Attendance delivered to private queue. Check the work-PC notification (normally within one minute). Expires in '+result.expires_in_hours+' hours.';
+  }catch(e){bridgeStatus.textContent='Unable to send: '+e.message}
+  finally{button.disabled=false}
+});
 
 // Results and backups
 function renderResults(){const tb=$('resultsTable');tb.innerHTML='';$('resultsCount').textContent=`${records.length} saved`;
@@ -434,6 +488,7 @@ async function init(){try{
   template=await fetch('./template.json').then(r=>{if(!r.ok)throw new Error('Template not found.');return r.json();});
   if(Object.keys(template.questions).length!==40||Object.keys(template.anchors).length!==4)throw new Error('OMR calibration file invalid.');
   seedMenus();$('rosterYear').value='2';$('rosterClass').value='C';$('rosterDate').value=attendanceDateToday();
+  if(new URLSearchParams(location.search).get('attendance')==='1')setTab('roster');
   renderKeys();renderRoster();renderResults();
   // Session-only unlock avoids saving a plaintext roster or persistent passphrase.
   let phrase='';try{phrase=sessionStorage.getItem('skorskal_staff_phrase_2026')||'';}catch{}

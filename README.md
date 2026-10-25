@@ -1,36 +1,24 @@
-# Skorskal © by MrDhameri — Official 2026 OMR Exam Scanner
+# Skorskal © by MrDhameri — exam-only OMR scanner
 
-Skorskal is an installable, offline-capable A4 OMR scanner for 20-question or 40-question answer keys, using one standardized 40-bubble A4 sheet (four black registration anchors, six-digit shaded pupil/subject ID).
+Skorskal is an installable mobile OMR marking app. Attendance and class register handoff belong exclusively to SMADBOD Guest/Master.
 
-## Pupils — read-only official 2026 roster
+## Access without a code
 
-Pupil names come from the **publisher-managed 2026 school roster** only. The file `roster-2026.json` contains **encrypted** records; names are not stored in public source code. Authorised staff unlock the roster using the staff access phrase supplied privately by the publisher. The roster is displayed on both the webapp and Android APK.
+There is no staff roster access phrase or attendance login in Skorskal. The scan saves pupils by the six-row shaded **year, class, examinee number, and subject code**, and the examiner can type a pupil name from the paper (optional). If that examinee number was previously marked on the same device, the saved name can be reused.
 
-The **Pupils** tab provides a **read-only exam candidate list** filtered by Year (1–6) and Class (Cemerlang, Gemilang, Terbilang). It does not mark, store, send, or submit attendance. Attendance belongs exclusively to the separate [SMADBOD Guest](https://mohammaddhameri-blip.github.io/smadbod/attendance/index.html) and Master applications.
+**Privacy and roster limitation:** the private official 2026 roster remains encrypted in the repository and is not unlocked or exposed by Skorskal. The Pupils tab and XLSX export show only exam records saved on the current device, **not all pupils on the official 2026 school list**. To match complete private rosters without staff passphrases, a secure authenticated school backend would be needed; never put all pupil names or a decryption key in publicly served JavaScript.
 
-To update official pupil names, the publisher generates a new encrypted roster file and updates the repository. The webapp fetches it online when available, retaining an offline cache; the Android APK gets roster changes through signed APK updates.
+## Workflow
 
-## OMR marking
+1. Save 20 or 40 question answer keys, grouped by year and subject.
+2. Scan an A4 four-anchor OMR sheet; review its shaded ID, answers and optional pupil name.
+3. Save the result; select Next pupil without losing the answer scheme.
+4. Browse locally marked pupils by year/class or export CSV, marked-pupil XLSX and JSON backup.
 
-1. Choose Year and Subject under **Answer keys**, then type/paste 20 or 40 A–D letters. A 20-letter paste populates questions 1–20; 21–40 remain blank and are not graded. Save the key.
-2. **Scan** an A4 OMR sheet using camera or an image. Review the ID, pupils' names and detected answers.
-3. Save the result. The answer key persists for the next pupil.
-4. **Results** keeps local marks, supports CSV/Excel exports, and allows JSON backup/restore of results and answer keys. Backups cannot replace the official pupil roster.
+## Android APK updates
 
-## Android APK — GitHub self-update
+Both the Skorskal webapp and APK load the same website code after it is published. The native Android app checks the controlled GitHub Release tag `android-latest` for an APK version update and requests installation confirmation; the website alone cannot silently update the APK. Release packaging and signing require a successful GitHub Actions build with the original publisher signing certificate.
 
-The native Android APK checks the controlled GitHub Release tag **`android-latest`** each time the app opens (when online). A manual **↻** update button is also present in the APK header.
-
-If a higher Android `versionCode` is published, Skorskal asks for approval, downloads the official `Skorskal-OMR.apk` and its SHA-256 checksum, validates the download, and invokes Android's system package installer for final approval. Offline use is unaffected when GitHub is unavailable. The application and local data stay intact with normal same-signature in-place upgrades.
-
-The GitHub Actions APK publishing workflow builds a **non-debuggable release APK** and restores its signing certificate from a private Actions cache. It fails safely rather than silently rotating an established signing certificate. **Keep a durable private backup of the signing keystore**: if GitHub discards that cache, future in-place updates cannot be published until the original certificate is restored.
-
-**Important for older test APKs:** previously published `v0.2.0-test` APKs may use a different signing certificate, and Android will not install the newly signed app over them. Back up saved marking results first, then uninstall the old test APK and install the official `android-latest` APK once. Future releases with the same publisher certificate can update in place.
-
-[Official APK releases](https://github.com/mohammaddhameri-blip/skorskal-omr/releases/tag/android-latest) · [APK build workflow](https://github.com/mohammaddhameri-blip/skorskal-omr/actions/workflows/build-android.yml)
-
-## Website
-
-GitHub Pages hosts the site at [mohammaddhameri-blip.github.io/skorskal-omr](https://mohammaddhameri-blip.github.io/skorskal-omr/), with HTTPS for camera access. The webapp and Android app maintain independent **device-local** marking records and attendance; no marks are automatically transmitted to GitHub or elsewhere.
+[Website](https://mohammaddhameri-blip.github.io/skorskal-omr/) · [Official APK releases](https://github.com/mohammaddhameri-blip/skorskal-omr/releases/tag/android-latest)
 
 © Skorskal by MrDhameri. All rights reserved.

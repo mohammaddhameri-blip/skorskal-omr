@@ -5,7 +5,7 @@ const yearChoices=['1','2','3','4','5','6'];
 const subjects={'00':'Pendidikan Muzik (proposed)','01':'Bahasa Melayu','02':'Bahasa Inggeris','03':'Mathematics (proposed)','04':'Science (proposed)','05':'Pendidikan Islam (proposed)','06':'Pendidikan Moral (proposed)','07':'Sejarah (proposed)','08':'RBT (proposed)','09':'Pendidikan Seni Visual (proposed)','10':'PJPK (proposed)'};
 const load=(key,fallback)=>{try{return JSON.parse(localStorage.getItem(`skorskal_${key}`))||fallback;}catch{return fallback;}};
 const persist=(key,value)=>localStorage.setItem(`skorskal_${key}`,JSON.stringify(value));
-let template,keys=load('keys',{}),people=[],rosterLoaded=false,records=load('results',[]),workCanvas=null,corners=null,warp=null,scanned=null,current=null,
+let template,keys=load('keys',{}),records=load('results',[]),workCanvas=null,corners=null,warp=null,scanned=null,current=null,
   stream=null,adjusting=false,selectedCorner=-1,sample=false,imageSource=null,workbookBuffer=null,workbookFileName='';
 let toastTimer;
 // Theme preference is local to this browser / APK, independent from exam records.
@@ -31,7 +31,7 @@ function message(text,type='neutral'){$('scanMessage').hidden=!text;$('scanMessa
 function code(v){return String(v??'').padStart(2,'0');}
 function keyId(y,s){return `${y}-${code(s)}`;}
 function personId(y,c,no){return `${y}${(c||'').toUpperCase()}-${code(no)}`;}
-function getPerson(y,c,no){return people.find(p=>personId(p.year,p.classCode,p.examNo)===personId(y,c,no));}
+function getPerson(y,c,no){return records.filter(r=>personId(r.year,r.classCode,r.examNo)===personId(y,c,no)&&r.name).at(-1)||null;}
 function getKey(y,s){return keys[keyId(y,s)]||null;}
 function download(data,name,type='text/plain'){const blob=data instanceof Blob?data:new Blob([data],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);}
 function safeText(text){return String(text??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
@@ -120,7 +120,7 @@ function currentInfo(){const year=$('editYear').value.trim(),cls=$('editClass').
 function initReview(){
   const [year,cls,n1,n2,s1,s2]=readId();
   $('reviewEmpty').hidden=true;$('reviewBody').hidden=false;
-  $('editYear').value=year;$('editClass').value=cls;$('editNo').value=n1+n2;$('editSubject').value=s1+s2;
+  $('editYear').value=year;$('editClass').value=cls;$('editNo').value=n1+n2;$('editSubject').value=s1+s2;$('editPupilName').value='';$('editPupilName').placeholder='Type name from paper (optional)';
   current={answers:Object.fromEntries(Object.entries(scanned.answers).map(([q,o])=>[q,{...o}])),sample:sample};
   renderAnswerGrid();refreshReview();
 }
@@ -139,9 +139,10 @@ function refreshReview(){
   if(!current)return;
   const {info,key,counts}=calculate(),p=getPerson(info.year,info.classCode,info.examNo);
   $('detectedId').textContent=`${info.year||'?'}${info.classCode||'?'}-${info.examNo}-${info.subject}`;
-  $('pupilName').textContent=p?.name||'Pupil not found in roster';
+  $('pupilName').textContent=p?.name||'Identified by exam number';
+  if(p&&!$('editPupilName').value.trim())$('editPupilName').placeholder=p.name;
   const goodId=yearChoices.includes(info.year)&&['C','G','T'].includes(info.classCode)&&/^\d{2}$/.test(info.examNo)&&/^\d{2}$/.test(info.subject)&&$('editNo').value.trim().length>0&&$('editSubject').value.trim().length>0;
-  $('idBadge').textContent=goodId?(p?'Pupil found':'Verify name'):'Fix ID';$('idBadge').className=`mini-pill ${goodId&&p?'ok':'warn'}`;
+  $('idBadge').textContent=goodId?'ID ready':'Fix ID';$('idBadge').className=`mini-pill ${goodId?'ok':'warn'}`;
   const invalid=Object.values(current.answers).filter(a=>a.status!=='ok').length;
   $('reviewStatus').textContent=invalid?`${invalid} require review`:'All read';$('reviewStatus').className=`mini-pill ${invalid?'warn':'ok'}`;
   $('markTotal').textContent=key?`${counts.total}/${counts.checked}`:'Not graded';
@@ -151,9 +152,9 @@ function refreshReview(){
   const rmax=key?Object.keys(key.answers).filter(q=>Number(q)>20&&key.answers[q]).length:0;
   $('scoreLeft').textContent=key?`${counts.left}/${lmax}`:'—';$('scoreRight').textContent=key?`${counts.right}/${rmax}`:'—';
   $('scoreReview').textContent=invalid;
-  $('saveWarning').hidden=!!(p&&key&&goodId&&!invalid&&!current.sample);
-  $('saveWarning').textContent=[current.sample?'Demo mode: this is not a real pupil. Scan a real sheet to save marks.':'',!goodId?'Correct the examinee ID before saving.':'',!p?'No roster match: please verify the handwritten name.':'',!key?'No answer key: this scan will be saved as Ungraded.':'',invalid?`${invalid} blank, multiple, or uncertain answers currently count as zero.`:''].filter(Boolean).join(' ');
-  $('saveResultBtn').disabled=!goodId||!rosterLoaded||!p||!!current.sample;
+  $('saveWarning').hidden=!!(key&&goodId&&!invalid&&!current.sample);
+  $('saveWarning').textContent=[current.sample?'Demo mode: this is not a real pupil. Scan a real sheet to save marks.':'',!goodId?'Correct the examinee ID before saving.':'',!p?'You may type the pupil name from the paper, or save by exam number.':'',!key?'No answer key: this scan will be saved as Ungraded.':'',invalid?`${invalid} blank, multiple, or uncertain answers currently count as zero.`:''].filter(Boolean).join(' ');
+  $('saveResultBtn').disabled=!goodId||!!current.sample;
 }
 function renderAnswerGrid(){
   const grid=$('answerGrid');
@@ -186,7 +187,8 @@ function renderAnswerGrid(){
 function makeRecord(){const {info,key,counts}=calculate(),p=getPerson(info.year,info.classCode,info.examNo);
   if(!info.year||!info.classCode||$('editNo').value.trim()===''||$('editSubject').value.trim()==='')throw new Error('Complete pupil year, class, number, and subject.');
   const invalid=Object.values(current.answers).filter(a=>a.status!=='ok').length;
-  return {...info,name:p?.name||'(Not matched)',date:new Date().toISOString(),keyTitle:key?.title||'',
+  const name=$('editPupilName').value.trim().slice(0,120)||p?.name||personId(info.year,info.classCode,info.examNo);
+  return {...info,name,date:new Date().toISOString(),keyTitle:key?.title||'',
     left:key?counts.left:null,right:key?counts.right:null,correct:key?counts.total:null,count:key?counts.checked:null,
     percent:key&&counts.checked?Math.round(10000*counts.total/counts.checked)/100:null,
     status:!key?'Ungraded':invalid?'Reviewed with blanks':'Graded',
@@ -262,87 +264,29 @@ function renderSavedKeys(){const box=$('savedKeys');box.innerHTML='';const saved
   }
 }
 
-// Official publisher-managed roster. The public repository stores AES-GCM ciphertext only.
-// Neither the web app nor APK accepts local pupil roster imports, edits or backup overrides.
-const rosterUrl='./roster-2026.json';
-const decode64=value=>Uint8Array.from(atob(value),c=>c.charCodeAt(0));
-async function unlockRoster(passphrase){
-  if(!passphrase.trim())throw new Error('Enter the staff roster access phrase.');
-  if(!globalThis.crypto?.subtle || typeof DecompressionStream!=='function')
-    throw new Error('This browser cannot decrypt the official roster. Update Chrome or Android System WebView.');
-  const res=await fetch(rosterUrl,{cache:'no-store'});
-  if(!res.ok)throw new Error('Official 2026 roster not found. Update Skorskal from the publisher.');
-  const file=await res.json();
-  if(file.academicYear!==2026||file.algorithm!=='PBKDF2-SHA256-250000+AES-256-GCM+zlib')
-    throw new Error('Unsupported official roster version.');
-  const passKey=await crypto.subtle.importKey('raw',new TextEncoder().encode(passphrase),'PBKDF2',false,['deriveKey']);
-  const aes=await crypto.subtle.deriveKey(
-    {name:'PBKDF2',salt:decode64(file.salt),iterations:250000,hash:'SHA-256'},
-    passKey,{name:'AES-GCM',length:256},false,['decrypt']);
-  let plaintext;
-  try{
-    plaintext=await crypto.subtle.decrypt(
-      {name:'AES-GCM',iv:decode64(file.iv),additionalData:new TextEncoder().encode('skorskal-roster-2026')},
-      aes,decode64(file.data));
-  }catch{throw new Error('Incorrect roster access phrase or damaged roster file.');}
-  const stream=new Blob([plaintext]).stream().pipeThrough(new DecompressionStream('deflate'));
-  const rows=JSON.parse(await new Response(stream).text());
-  if(!Array.isArray(rows)||rows.length!==file.count||rows.length<1)
-    throw new Error('The official roster contents are incomplete.');
-  const unique=new Set();
-  const roster=rows.map(row=>{
-    if(!Array.isArray(row)||row.length!==4)throw new Error('Invalid roster record.');
-    const [year,classCode,examNo,name]=row.map(v=>String(v).trim());
-    const id=personId(year,classCode,examNo);
-    if(!/^[1-6]$/.test(year)||!['C','G','T'].includes(classCode)||!/^[0-9]{2}$/.test(examNo)||!name||unique.has(id))
-      throw new Error('Invalid or duplicate pupil ID in official roster.');
-    unique.add(id);
-    return {year,classCode,examNo,name,_sheet:'2026 official'};
-  });
-  people=roster;rosterLoaded=true;
-  $('rosterPassphrase').value='';$('rosterPassphrase').disabled=true;
-  $('unlockRosterBtn').disabled=true;$('unlockRosterBtn').textContent='Roster unlocked';
-  $('rosterImportStatus').textContent='Official '+file.academicYear+' roster · '+roster.length+' pupils · read-only · version '+file.version;
-  $('rosterAccessPanel').hidden=true;
-  renderRoster();if(current)refreshReview();
-  try{sessionStorage.setItem('skorskal_staff_phrase_2026',passphrase);}catch{}
-  return roster.length;
-}
-$('unlockRosterBtn').onclick=async()=>{
-  const button=$('unlockRosterBtn');button.disabled=true;
-  $('rosterImportStatus').textContent='Checking official roster…';
-  try{const count=await unlockRoster($('rosterPassphrase').value);toast(count+' pupils loaded from official 2026 roster.');}
-  catch(e){$('rosterImportStatus').textContent=e.message;button.disabled=false;toast(e.message);}
-};
-$('rosterPassphrase').addEventListener('keydown',e=>{if(e.key==='Enter')$('unlockRosterBtn').click();});
-const openSkorskalUpdates=()=>{
-  if(window.SkorskalAndroid?.checkForUpdates){window.SkorskalAndroid.checkForUpdates();return;}
-  window.open('https://github.com/mohammaddhameri-blip/skorskal-omr/releases','_blank','noopener,noreferrer');
-};
-$('checkUpdatesBtn').onclick=openSkorskalUpdates;
-if(window.SkorskalAndroid?.checkForUpdates){
-  const nativeUpdate=$('androidUpdateBtn');
-  if(nativeUpdate){nativeUpdate.style.display='inline-flex';nativeUpdate.onclick=openSkorskalUpdates;}
-}
-// The Pupils tab is a read-only OMR roster lookup, not an attendance app.
+// Skorskal is exam-only. Do not ask for a roster phrase or perform attendance.
+// The Pupils tab displays locally saved exam records, not the private school roster.
 const classLabels={C:'CEMERLANG',G:'GEMILANG',T:'TERBILANG'};
+const openSkorskalUpdates=()=>{
+ if(window.SkorskalAndroid?.checkForUpdates){window.SkorskalAndroid.checkForUpdates();return;}
+ window.open('https://github.com/mohammaddhameri-blip/skorskal-omr/releases/tag/android-latest','_blank','noopener');
+};
+const nativeUpdate=$('androidUpdateBtn');
+if(nativeUpdate&&window.SkorskalAndroid?.checkForUpdates){nativeUpdate.style.display='inline-flex';nativeUpdate.onclick=openSkorskalUpdates;}
 for(const id of ['rosterYear','rosterClass'])$(id).addEventListener('change',renderRoster);
 function renderRoster(){
  const list=$('attendanceList');list.replaceChildren();
- const count=$('rosterCount');
- if(!rosterLoaded){count.textContent='Locked';list.textContent='Unlock the official 2026 roster to view examination candidates.';return;}
  const year=$('rosterYear').value,cls=$('rosterClass').value;
- const pupils=people.filter(p=>p.year===year&&p.classCode===cls)
-   .sort((a,b)=>Number(a.examNo)-Number(b.examNo)||a.name.localeCompare(b.name));
- count.textContent='Year '+year+' · '+classLabels[cls]+' · '+pupils.length+' examinees';
+ const latest=new Map();for(const r of records){if(r.year===year&&r.classCode===cls)latest.set(personId(r.year,r.classCode,r.examNo),r);}
+ const pupils=[...latest.values()].sort((a,b)=>Number(a.examNo)-Number(b.examNo));
+ $('rosterCount').textContent=pupils.length+' marked pupils';
  for(const pupil of pupils){
-   const line=document.createElement('div');line.className='attendance-pupil';
-   line.style.cssText='display:flex;align-items:center;gap:16px;padding:12px;';
+   const line=document.createElement('div');line.className='attendance-pupil';line.style.cssText='display:flex;align-items:center;gap:16px;padding:12px;';
    const number=document.createElement('span');number.className='attendance-no';number.textContent=pupil.examNo;
-   const name=document.createElement('strong');name.className='attendance-name';name.textContent=pupil.name;
+   const name=document.createElement('strong');name.className='attendance-name';name.textContent=pupil.name||personId(pupil.year,pupil.classCode,pupil.examNo);
    line.append(number,name);list.append(line);
  }
- if(!pupils.length)list.textContent='No candidates for the selected year and class.';
+ if(!pupils.length)list.textContent='No exam records saved for this class on this device yet.';
 }
 
 // Results and backups
@@ -357,7 +301,7 @@ function renderResults(){const tb=$('resultsTable');tb.innerHTML='';$('resultsCo
 $('exportResultsBtn').onclick=()=>{download(resultsCSV(records),'Skorskal_Results.csv','text/csv;charset=utf-8');toast('CSV exported.');};
 $('backupBtn').onclick=()=>{
   download(JSON.stringify({app:'skorskal',version:4,keys,records},null,2),'Skorskal_Backup.json','application/json');
-  toast('Keys and marking results backed up. Official roster is never exported in backups.');
+  toast('Answer keys and exam results backed up.');
 };
 $('restoreInput').addEventListener('change',async e=>{
   const file=e.target.files?.[0];if(!file)return;
@@ -365,16 +309,17 @@ $('restoreInput').addEventListener('change',async e=>{
     const backup=JSON.parse(await file.text());
     if(backup.app!=='skorskal'||!Array.isArray(backup.records)||!backup.keys||typeof backup.keys!=='object')
       throw new Error('Not a valid Skorskal backup.');
-    if(!confirm('Restore saved keys and results? The official 2026 roster cannot be replaced.'))return;
+    if(!confirm('Restore saved answer keys and exam results?'))return;
     keys=backup.keys;records=backup.records;
     persist('keys',keys);persist('results',records);
-    renderResults();renderKeys();renderRoster();toast('Exam keys and results restored; official roster unchanged.');
+    renderResults();renderKeys();renderRoster();toast('Exam keys and results restored.');
   }catch(err){toast(err.message);}
   finally{e.target.value='';}
 });
 $('exportWorkbookBtn').onclick=()=>{
-  if(!rosterLoaded){toast('Unlock the official 2026 roster first.');return;}
-  try{download(createRosterWorkbook(people,records),'Skorskal_2026_Marked_Roster.xlsx');toast('Official 2026 marked roster exported.');}
+  try{const latest=new Map();for(const r of records)latest.set(personId(r.year,r.classCode,r.examNo),r);
+    const markedPeople=[...latest.values()].map(r=>({year:r.year,classCode:r.classCode,examNo:r.examNo,name:r.name}));
+    download(createRosterWorkbook(markedPeople,records),'Skorskal_Marked_Pupils.xlsx');toast('Marked pupils exported to Excel.');}
   catch(e){toast('Excel export failed: '+e.message);}
 };
 
@@ -383,9 +328,7 @@ async function init(){try{
   if(Object.keys(template.questions).length!==40||Object.keys(template.anchors).length!==4)throw new Error('OMR calibration file invalid.');
   seedMenus();$('rosterYear').value='2';$('rosterClass').value='C';
   renderKeys();renderRoster();renderResults();
-  // Session-only unlock avoids saving a plaintext roster or persistent passphrase.
-  let phrase='';try{phrase=sessionStorage.getItem('skorskal_staff_phrase_2026')||'';}catch{}
-  if(phrase){unlockRoster(phrase).catch(()=>{try{sessionStorage.removeItem('skorskal_staff_phrase_2026');}catch{};});}
+  // No roster access code is required by the exam scanner.
   if('serviceWorker'in navigator && location.protocol!=='file:')navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'}).then(reg=>reg.update()).catch(()=>{});
 }catch(e){message('Could not initialize Skorskal: '+e.message+'. Serve this folder over localhost or HTTPS.','error');}}
 init();

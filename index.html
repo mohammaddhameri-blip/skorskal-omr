@@ -5,7 +5,7 @@
   <meta name="theme-color" content="#102739"><meta name="description" content="skorskal: mobile OMR grading for 40-question A4 sheets. All marking stays on this device.">
   <link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <script>try{document.documentElement.dataset.theme=localStorage.getItem('skorskal_theme')==='dark'?'dark':'light'}catch(e){document.documentElement.dataset.theme='light'}</script>
-  <link rel="stylesheet" href="style.css?v=20261023-attendance"><title>skorskal · OMR Scanner</title>
+  <link rel="stylesheet" href="style.css?v=20261025-exam-simple"><title>skorskal · OMR Scanner</title>
 </head>
 <body>
 <header class="app-header">
@@ -51,8 +51,9 @@
           <div class="card-head"><h2>Scan review</h2><span id="reviewStatus" class="mini-pill">Waiting</span></div>
           <div id="reviewEmpty" class="review-empty"><div>◎</div><p>Your detected pupil and answer results will appear here.</p></div>
           <div id="reviewBody" hidden>
-            <div class="review-id"><div><small>DETECTED ID</small><strong id="detectedId">—</strong><p id="pupilName">Not identified</p></div><span id="idBadge" class="mini-pill">Check</span></div>
+            <div class="review-id"><div><small>DETECTED ID</small><strong id="detectedId">—</strong><p id="pupilName">Identified by exam number</p></div><span id="idBadge" class="mini-pill">Check</span></div>
             <p class="field-label">Verify pupil details</p>
+            <label class="pupil-name-entry">Pupil name (optional)<input id="editPupilName" autocomplete="off" placeholder="Type name from paper"></label>
             <div class="field-grid four"><label>Year<input id="editYear" inputmode="numeric" maxlength="1"></label><label>Class<input id="editClass" maxlength="1"></label><label>No.<input id="editNo" inputmode="numeric" maxlength="2"></label><label>Subject<input id="editSubject" inputmode="numeric" maxlength="2"></label></div>
             <div class="score-wrap"><div><small>MARKS</small><strong id="markTotal">—</strong><p id="gradeInfo">Set an answer key to grade</p></div><div class="score-rings"><span id="scorePercent">—</span></div></div>
             <div class="summary-grid"><div><small>Q1–20</small><strong id="scoreLeft">—</strong></div><div><small>Q21–40</small><strong id="scoreRight">—</strong></div><div><small>To review</small><strong id="scoreReview">—</strong></div></div>
@@ -76,30 +77,25 @@
       <div class="card slim"><h3>Saved answer keys</h3><div id="savedKeys" class="list-container"></div></div>
     </section>
     <section class="page" id="page-roster">
-      <div class="page-heading"><div><span class="eyebrow">OFFICIAL 2026 EXAM ROSTER</span><h1>Pupil roster</h1><p>View examinee names and numbers for OMR matching. Attendance is managed exclusively in SMADBOD.</p></div></div>
-      <div class="card form-card" id="rosterAccessPanel">
-        <div class="field-grid"><label>Staff roster access phrase<input id="rosterPassphrase" type="password" autocomplete="off" placeholder="Enter staff access phrase"></label></div>
-        <div class="key-actions"><button class="btn primary" id="unlockRosterBtn">Unlock 2026 roster</button><button class="btn secondary" id="checkUpdatesBtn">Check for updates ↗</button></div>
-        <p id="rosterImportStatus" class="helper" role="status">Unlock the official 2026 examinee roster.</p>
-      </div>
+      <div class="page-heading"><div><span class="eyebrow">EXAM RECORDS</span><h1>Marked pupils</h1><p>See local exam records by Year and Class. No roster code or attendance.</p></div></div>
       <div class="card slim">
-        <div class="card-head"><h3>Examinees</h3><span id="rosterCount" class="mini-pill">Locked</span></div>
+        <div class="card-head"><h3>Examinees</h3><span id="rosterCount" class="mini-pill">0 marked pupils</span></div>
         <div class="roster-filters" role="group" aria-label="Examinee year and class">
           <label>Year<select id="rosterYear"><option value="1">Year 1</option><option value="2">Year 2</option><option value="3">Year 3</option><option value="4">Year 4</option><option value="5">Year 5</option><option value="6">Year 6</option></select></label>
           <label>Class<select id="rosterClass"><option value="C">CEMERLANG</option><option value="G">GEMILANG</option><option value="T">TERBILANG</option></select></label>
         </div>
-        <div class="attendance-list" id="attendanceList" role="group" aria-label="Read-only examinee roster"></div>
+        <div class="attendance-list" id="attendanceList" role="group" aria-label="Locally saved exam records"></div>
       </div>
     </section>
     <section class="page" id="page-results">
       <div class="page-heading"><div><span class="eyebrow">MARKING RECORDS</span><h1>Saved results</h1><p>Results are stored on this device. Export regularly to back them up.</p></div></div>
-      <div class="card slim"><div class="result-actions"><button class="btn primary" id="exportResultsBtn">Export CSV</button><button class="btn secondary" id="exportWorkbookBtn">Export marked roster (.xlsx)</button><button class="btn secondary" id="backupBtn">Backup JSON</button><label class="btn secondary file-btn">Restore JSON<input type="file" id="restoreInput" accept=".json,application/json"></label></div><div id="excelHint" class="helper">Excel export uses the current verified 2026 school roster and saved results. Requires the staff roster to be unlocked.</div></div>
+      <div class="card slim"><div class="result-actions"><button class="btn primary" id="exportResultsBtn">Export CSV</button><button class="btn secondary" id="exportWorkbookBtn">Export marked pupils (.xlsx)</button><button class="btn secondary" id="backupBtn">Backup JSON</button><label class="btn secondary file-btn">Restore JSON<input type="file" id="restoreInput" accept=".json,application/json"></label></div><div id="excelHint" class="helper">Excel export includes pupils marked on this device. This is not a complete official school roster.</div></div>
       <div class="card slim"><div class="card-head"><h3>All results</h3><span class="mini-pill" id="resultsCount">0 saved</span></div><div class="scroll-table"><table><thead><tr><th>Pupil</th><th>Paper</th><th>Mark</th><th>Status</th><th></th></tr></thead><tbody id="resultsTable"></tbody></table></div></div>
     </section>
   </main>
   <footer>skorskal© by MrDhameri <span>·</span> A4 <span>·</span> 20/40 questions <span>·</span> v1.4 <span>·</span> On-device marking</footer>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
-<script type="module" src="app.js?v=20261025-exam-only"></script>
+<script type="module" src="app.js?v=20261025-no-access-codes"></script>
 </body>
 </html>

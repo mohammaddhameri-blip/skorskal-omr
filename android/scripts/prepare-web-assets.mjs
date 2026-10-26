@@ -4,7 +4,7 @@ import {join,resolve} from 'node:path';
 const root=resolve(import.meta.dirname,'../..');
 const dst=join(root,'android/app/src/main/assets/web');
 mkdirSync(dst,{recursive:true});
-for (const name of ['index.html','app.js','style.css','vision.js','workbook.js','roster-2026.json','template.json','manifest.webmanifest','Skorskal_A4_OMR_40.pdf']) {
+for (const name of ['index.html','app.js','sheet.js','style.css','vision.js','workbook.js','roster-2026.json','template.json','manifest.webmanifest','Skorskal_A4_OMR_40.pdf']) {
   const from=join(root,name);
   if(!existsSync(from)) throw new Error('Missing website asset: '+name);
   copyFileSync(from,join(dst,name));
@@ -41,3 +41,4 @@ let h=readFileSync(html,'utf8');
 h=h.replace('v1.4 <span>·</span> On-device marking','Android v0.3 <span>·</span> Auto-update enabled');
 writeFileSync(html,h,'utf8');
 console.log('Bundled Skorskal website assets with native exports and camera support.');
+

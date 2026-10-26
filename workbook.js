@@ -9,7 +9,7 @@ function parseXML(xml){const doc=new DOMParser().parseFromString(xml,'applicatio
 function xmlText(node,tag){return byName(node,tag)[0]?.textContent||'';}
 function csvQuote(s){s=String(s??'');if(/^[=+\-@]/.test(s))s="'"+s;return '"'+s.replaceAll('"','""')+'"';}
 export const resultsCSV=(recs)=>{
-  const cols=['Year','Class','Examinee No','Name','Subject Code','Answer Key','Q1-20','Q21-40','Total Correct','Questions Graded','Percentage','Scan Status','Scanned At'];
+  const cols=['Year','Class','Examinee No','Name','Subject Code','Answer Key','Left column','Right column','Total Correct','Questions Graded','Percentage','Scan Status','Scanned At'];
   const rows=recs.map(r=>[r.year,r.classCode,r.examNo,r.name,r.subject,r.keyTitle,r.left,r.right,r.correct,r.count,r.percent,r.status,r.date]);
   return [cols,...rows].map(row=>row.map(csvQuote).join(',')).join('\r\n');
 };
@@ -172,13 +172,13 @@ export async function updateWorkbook(originalBuffer,people,results){
 export function createRosterWorkbook(people,records){
   const recent=new Map();
   for(const result of records){
-    const id=`${result.year}${result.classCode}-${String(result.examNo).padStart(2,'0')}`;
+    const id=result.year&&result.classCode&&result.examNo?`${result.year}${result.classCode}-${String(result.examNo).padStart(2,'0')}`:result.id;
     const existing=recent.get(id);
     if(!existing||String(existing.date||'')<=String(result.date||''))recent.set(id,result);
   }
   const headers=['Year','Class','Examinee No','Name','Subject Code','Mark','Maximum','Percentage','Status','Scanned At'];
   const items=[headers,...people.map(p=>{
-    const r=recent.get(`${p.year}${p.classCode}-${p.examNo}`);
+    const r=recent.get(p.year&&p.classCode&&p.examNo?`${p.year}${p.classCode}-${p.examNo}`:p.id);
     return [p.year,p.classCode,p.examNo,p.name,r?.subject??'',r?.correct??'',
       r?.count??'',r?.percent===null||r?.percent===undefined?'':r.percent+'%',
       r?.status??'',r?.date??''];
@@ -193,9 +193,10 @@ export function createRosterWorkbook(people,records){
   const fileList=new Map([
     ['[Content_Types].xml',encoder.encode('<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>')],
     ['_rels/.rels',encoder.encode('<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="'+pkg+'"><Relationship Id="rId1" Type="'+relationship+'/officeDocument" Target="xl/workbook.xml"/></Relationships>')],
-    ['xl/workbook.xml',encoder.encode('<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="'+main+'" xmlns:r="'+relationship+'"><sheets><sheet name="2026 School Roster" sheetId="1" r:id="rId1"/></sheets></workbook>')],
+    ['xl/workbook.xml',encoder.encode('<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="'+main+'" xmlns:r="'+relationship+'"><sheets><sheet name="Marked scans" sheetId="1" r:id="rId1"/></sheets></workbook>')],
     ['xl/_rels/workbook.xml.rels',encoder.encode('<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="'+pkg+'"><Relationship Id="rId1" Type="'+relationship+'/worksheet" Target="worksheets/sheet1.xml"/></Relationships>')],
     ['xl/worksheets/sheet1.xml',encoder.encode('<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="'+main+'"><sheetViews><sheetView workbookViewId="0"/></sheetViews><cols><col min="1" max="3" width="14" customWidth="1"/><col min="4" max="4" width="50" customWidth="1"/><col min="5" max="10" width="17" customWidth="1"/></cols><sheetData>'+xmlRows+'</sheetData></worksheet>')]
   ]);
   return zipStored(fileList);
 }
+

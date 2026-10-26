@@ -1,3 +1,4 @@
+import {settings,buildTemplate,sheetSVG,sheetCanvas} from './sheet.js';
 import {imageToPixels,findAnchors,straighten,analyze} from './vision.js';
 import {resultsCSV,createRosterWorkbook} from './workbook.js';
 const $=id=>document.getElementById(id),all=s=>[...document.querySelectorAll(s)];
@@ -5,6 +6,7 @@ const yearChoices=['1','2','3','4','5','6'];
 const subjects={'00':'Pendidikan Muzik (proposed)','01':'Bahasa Melayu','02':'Bahasa Inggeris','03':'Mathematics (proposed)','04':'Science (proposed)','05':'Pendidikan Islam (proposed)','06':'Pendidikan Moral (proposed)','07':'Sejarah (proposed)','08':'RBT (proposed)','09':'Pendidikan Seni Visual (proposed)','10':'PJPK (proposed)'};
 const load=(key,fallback)=>{try{return JSON.parse(localStorage.getItem(`skorskal_${key}`))||fallback;}catch{return fallback;}};
 const persist=(key,value)=>localStorage.setItem(`skorskal_${key}`,JSON.stringify(value));
+let baseTemplate,config=settings(load('sheet',{}));
 let template,keys=load('keys',{}),records=load('results',[]),workCanvas=null,corners=null,warp=null,scanned=null,current=null,
   stream=null,adjusting=false,selectedCorner=-1,sample=false,imageSource=null,workbookBuffer=null,workbookFileName='';
 let toastTimer;
@@ -32,10 +34,10 @@ function code(v){return String(v??'').padStart(2,'0');}
 function keyId(y,s){return `${y}-${code(s)}`;}
 function personId(y,c,no){return `${y}${(c||'').toUpperCase()}-${code(no)}`;}
 function getPerson(y,c,no){return records.filter(r=>personId(r.year,r.classCode,r.examNo)===personId(y,c,no)&&r.name).at(-1)||null;}
-function getKey(y,s){return keys[keyId(y,s)]||null;}
+function getKey(){return keys[$('activeKey').value]||null;}
 function download(data,name,type='text/plain'){const blob=data instanceof Blob?data:new Blob([data],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);}
 function safeText(text){return String(text??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
-function setTab(tab){all('.nav').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));all('.page').forEach(s=>s.classList.toggle('visible',s.id===`page-${tab}`));if(tab==='roster')renderRoster();if(tab==='results')renderResults();if(tab==='keys')renderKeys();}
+function setTab(tab){all('.nav').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));all('.page').forEach(s=>s.classList.toggle('visible',s.id===`page-${tab}`));if(tab==='roster')renderRoster();if(tab==='results')renderResults();if(tab==='keys')renderKeys();if(tab==='scan')selectKey();}
 all('.nav').forEach(b=>b.addEventListener('click',()=>{stopCamera();setTab(b.dataset.tab);}));
 function seedMenus(){for(const id of ['keyYear']){const s=$(id);s.innerHTML=yearChoices.map(y=>`<option value="${y}">Year ${y}</option>`).join('');s.value='5';}
   const select=$('keySubject');select.innerHTML=Array.from({length:100},(_,n)=>{const c=code(n);return `<option value="${c}">${c} ${safeText(subjects[c]||'Other subject')}</option>`;}).join('');select.value='02';
@@ -103,20 +105,19 @@ pc.addEventListener('pointerup',()=>{selectedCorner=-1;});pc.addEventListener('p
 
 // Test with a generated sample sheet, using the exact printable PDF template as its reference.
 $('demoBtn').addEventListener('click',async()=>{
-  const img=new Image();img.src='assets/sheet-preview.png';await img.decode();
-  const cv=document.createElement('canvas');cv.width=img.naturalWidth;cv.height=img.naturalHeight;const ctx=cv.getContext('2d');ctx.drawImage(img,0,0);
+  const cv=await sheetCanvas(template),ctx=cv.getContext('2d');
   const scale=cv.width/template.page.width_pt, h=template.page.height_pt;
-  const mark=b=>{ctx.fillStyle='#0a0c11';ctx.beginPath();ctx.arc(b.x*scale,(h-b.y)*scale,b.radius_pt*scale*.74,0,2*Math.PI);ctx.fill();};
+  const mark=b=>{ctx.fillStyle='#0a0c11';ctx.beginPath();ctx.ellipse(b.x*scale,(h-b.y)*scale,(b.rx||b.radius_pt)*scale*.85,(b.ry||b.radius_pt)*scale*.85,0,0,2*Math.PI);ctx.fill();};
   const ids={year:'5',class:'T',examinee_tens:'1',examinee_ones:'2',subject_tens:'0',subject_ones:'2'};
   Object.entries(ids).forEach(([key,val])=>mark(template.identification[key].bubbles[val]));
-  Object.entries(template.questions).forEach(([q,obj])=>mark(obj.bubbles['ABCD'[(Number(q)-1)%4]]));
+  Object.entries(template.questions).forEach(([q,obj])=>mark(obj.bubbles['ABCDE'[(Number(q)-1)%config.options]]));
   stopCamera();await processCanvas(cv);sample=true;if(current){current.sample=true;refreshReview();}
-  message('Sample sheet: 5T-12-02 with ABCD repeating. It uses a temporary sample answer key and cannot be saved as a pupil result.','success');
+  message('Sample sheet: 5T-12-02 with repeating answer choices. It uses a temporary sample answer key and cannot be saved as a pupil result.','success');
 });
 
 // Review, manual corrections, grading, result persistence.
 function readId(){const fields=['year','class','examinee_tens','examinee_ones','subject_tens','subject_ones'];return fields.map(k=>scanned.id[k].answer||'');}
-function currentInfo(){const year=$('editYear').value.trim(),cls=$('editClass').value.trim().toUpperCase(),num=code($('editNo').value.trim()),subject=code($('editSubject').value.trim());return {year,classCode:cls,examNo:num,subject};}
+function currentInfo(){const year=$('editYear').value.trim(),cls=$('editClass').value.trim().toUpperCase(),num=$('editNo').value.trim()?code($('editNo').value.trim()):'',subject=$('editSubject').value.trim()?code($('editSubject').value.trim()):'';return {year,classCode:cls,examNo:num,subject};}
 function initReview(){
   const [year,cls,n1,n2,s1,s2]=readId();
   $('reviewEmpty').hidden=true;$('reviewBody').hidden=false;
@@ -126,47 +127,47 @@ function initReview(){
 }
 for(const id of ['editYear','editClass','editNo','editSubject'])$(id).addEventListener('input',refreshReview);
 function calculate(){
-  const info=currentInfo(),key=current?.sample?{title:'Demo key (not saved)',answers:Object.fromEntries(Array.from({length:40},(_,i)=>[String(i+1),'ABCD'[i%4]]))}:getKey(info.year,info.subject),counts={left:0,right:0,total:0,checked:0};
-  if(key)for(let q=1;q<=40;q++){
+  const info=currentInfo(),key=current?.sample?{title:'Demo key (not saved)',answers:Object.fromEntries(Array.from({length:config.count},(_,i)=>[String(i+1),'ABCDE'[i%config.options]]))}:getKey(info.year,info.subject),counts={left:0,right:0,total:0,checked:0};
+  if(key)for(let q=1;q<=config.count;q++){
     const expected=key.answers[String(q)];if(!expected)continue;
     counts.checked++;
     const correct=current?.answers[String(q)]?.answer===expected;
-    if(correct){counts.total++;if(q<=20)counts.left++;else counts.right++;}
+    if(correct){counts.total++;if(q<=template.split)counts.left++;else counts.right++;}
   }
   return {info,key,counts};
 }
 function refreshReview(){
   if(!current)return;
-  const {info,key,counts}=calculate(),p=getPerson(info.year,info.classCode,info.examNo);
+  const {info,key,counts}=calculate(),p=(info.year&&info.classCode&&info.examNo?getPerson(info.year,info.classCode,info.examNo):null);
   $('detectedId').textContent=`${info.year||'?'}${info.classCode||'?'}-${info.examNo}-${info.subject}`;
-  $('pupilName').textContent=p?.name||'Identified by exam number';
+  $('pupilName').textContent=p?.name||'Unnamed scan — name optional';
   if(p&&!$('editPupilName').value.trim())$('editPupilName').placeholder=p.name;
   const goodId=yearChoices.includes(info.year)&&['C','G','T'].includes(info.classCode)&&/^\d{2}$/.test(info.examNo)&&/^\d{2}$/.test(info.subject)&&$('editNo').value.trim().length>0&&$('editSubject').value.trim().length>0;
-  $('idBadge').textContent=goodId?'ID ready':'Fix ID';$('idBadge').className=`mini-pill ${goodId?'ok':'warn'}`;
+  $('idBadge').textContent=goodId?'ID ready':'ID optional';$('idBadge').className=`mini-pill ${goodId?'ok':'warn'}`;
   const invalid=Object.values(current.answers).filter(a=>a.status!=='ok').length;
   $('reviewStatus').textContent=invalid?`${invalid} require review`:'All read';$('reviewStatus').className=`mini-pill ${invalid?'warn':'ok'}`;
   $('markTotal').textContent=key?`${counts.total}/${counts.checked}`:'Not graded';
-  $('gradeInfo').textContent=key?key.title:'No saved answer key for this year + subject';
+  $('gradeInfo').textContent=key?key.title:'Select a saved answer key above';
   $('scorePercent').textContent=counts.checked?`${Math.round(100*counts.total/counts.checked)}%`:'—';
-  const lmax=key?Object.keys(key.answers).filter(q=>Number(q)<=20&&key.answers[q]).length:0;
-  const rmax=key?Object.keys(key.answers).filter(q=>Number(q)>20&&key.answers[q]).length:0;
+  const lmax=key?Object.keys(key.answers).filter(q=>Number(q)<=template.split&&key.answers[q]).length:0;
+  const rmax=key?Object.keys(key.answers).filter(q=>Number(q)>template.split&&key.answers[q]).length:0;
   $('scoreLeft').textContent=key?`${counts.left}/${lmax}`:'—';$('scoreRight').textContent=key?`${counts.right}/${rmax}`:'—';
   $('scoreReview').textContent=invalid;
-  $('saveWarning').hidden=!!(key&&goodId&&!invalid&&!current.sample);
-  $('saveWarning').textContent=[current.sample?'Demo mode: this is not a real pupil. Scan a real sheet to save marks.':'',!goodId?'Correct the examinee ID before saving.':'',!p?'You may type the pupil name from the paper, or save by exam number.':'',!key?'No answer key: this scan will be saved as Ungraded.':'',invalid?`${invalid} blank, multiple, or uncertain answers currently count as zero.`:''].filter(Boolean).join(' ');
-  $('saveResultBtn').disabled=!goodId||!!current.sample;
+  $('saveWarning').hidden=!!(key&&!invalid&&!current.sample);
+  $('saveWarning').textContent=[current.sample?'Demo mode: this is not a real pupil. Scan a real sheet to save marks.':'','',!p?'Name and pupil ID are optional.':'',!key?'Select an answer key before saving.':'',invalid?`${invalid} blank, multiple, or uncertain answers currently count as zero.`:''].filter(Boolean).join(' ');
+  $('saveResultBtn').disabled=!key||!!current.sample;
 }
 function renderAnswerGrid(){
   const grid=$('answerGrid');
   grid.replaceChildren();
-  for(const [first,last] of [[1,20],[21,40]]){
+  for(const [first,last] of [[1,template.split],[template.split+1,config.count]]){
     const column=document.createElement('div');
     column.className='answer-column';
     for(let q=first;q<=last;q++){
       const data=current.answers[String(q)]||{answer:null,status:'blank'};
       const row=document.createElement('div');row.className='answer-line';
       const title=document.createElement('span');title.className='answer-num';title.textContent=q+'.';row.appendChild(title);
-      for(const ans of ['A','B','C','D']){
+      for(const ans of 'ABCDE'.slice(0,config.options)){
         const b=document.createElement('button');
         b.type='button';
         b.className=`opt ${data.answer===ans?'selected':''} ${data.status==='multiple'&&data.scores?.[ans]>.19?'mismatch':''}`;
@@ -184,11 +185,11 @@ function renderAnswerGrid(){
     grid.appendChild(column);
   }
 }
-function makeRecord(){const {info,key,counts}=calculate(),p=getPerson(info.year,info.classCode,info.examNo);
-  if(!info.year||!info.classCode||$('editNo').value.trim()===''||$('editSubject').value.trim()==='')throw new Error('Complete pupil year, class, number, and subject.');
+function makeRecord(){const {info,key,counts}=calculate(),p=(info.year&&info.classCode&&info.examNo?getPerson(info.year,info.classCode,info.examNo):null);
+  if(!key)throw new Error('Select a saved answer key first.');
   const invalid=Object.values(current.answers).filter(a=>a.status!=='ok').length;
-  const name=$('editPupilName').value.trim().slice(0,120)||p?.name||personId(info.year,info.classCode,info.examNo);
-  return {...info,name,date:new Date().toISOString(),keyTitle:key?.title||'',
+  const name=$('editPupilName').value.trim().slice(0,120)||p?.name||`Scan ${records.length+1}`;
+  return {...info,name,sheet:{...config},keyId:$('activeKey').value,date:new Date().toISOString(),keyTitle:key?.title||'',
     left:key?counts.left:null,right:key?counts.right:null,correct:key?counts.total:null,count:key?counts.checked:null,
     percent:key&&counts.checked?Math.round(10000*counts.total/counts.checked)/100:null,
     status:!key?'Ungraded':invalid?'Reviewed with blanks':'Graded',
@@ -211,13 +212,13 @@ $('nextPupilBtn').addEventListener('click',()=>{current=null;scanned=null;warp=n
 // Answer keys
 function updateKeyGrid(){
   const grid=$('keyGrid');grid.innerHTML='';
-  for(const [first,last] of [[1,20],[21,40]]){
+  for(const [first,last] of [[1,template.split],[template.split+1,config.count]]){
     const column=document.createElement('div');column.className='key-column';
     for(let q=first;q<=last;q++){
       const row=document.createElement('div');row.className='key-row';
       const title=document.createElement('strong');title.textContent=`${q}.`;row.appendChild(title);
       const selected=keyDraft[String(q)]||null;
-      for(const ans of ['A','B','C','D']){
+      for(const ans of 'ABCDE'.slice(0,config.options)){
         const btn=document.createElement('button');btn.type='button';
         btn.className=`opt ${selected===ans?'selected':''}`;btn.textContent=ans;btn.title=`Key Q${q}: ${ans}`;
         btn.onclick=()=>{if(selected===ans)delete keyDraft[String(q)];else keyDraft[String(q)]=ans;updateKeyGrid();};
@@ -229,37 +230,56 @@ function updateKeyGrid(){
   }
 }
 let keyDraft={};
-function renderKeys(){const id=keyId($('keyYear').value,$('keySubject').value),key=keys[id];if(key){$('keyTitle').value=key.title;keyDraft={...key.answers};}else{keyDraft={};$('keyTitle').value='';}updateKeyGrid();renderSavedKeys();}
+function applyConfig(value){
+  config=settings(value);template=buildTemplate(baseTemplate,config);persist('sheet',config);
+  $('questionCount').value=config.count;$('optionCount').value=config.options;$('bubbleShape').value=config.shape;
+  $('sheetInfo').textContent=`${config.count} questions · ${template.split} + ${config.count-template.split} · A–${'ABCDE'[config.options-1]} · ${config.shape}`;
+  $('leftLabel').textContent=`Q1–${template.split}`;$('rightLabel').textContent=template.split<config.count?`Q${template.split+1}–${config.count}`:'—';
+}
+function refreshKeySelector(preferred=$('activeKey').value){
+  const select=$('activeKey');select.replaceChildren(new Option('Select answer key',''));
+  for(const [id,key] of Object.entries(keys))select.add(new Option(key.title,id));
+  select.value=keys[preferred]?preferred:Object.keys(keys)[0]||'';
+  selectKey();
+}
+function selectKey(){const key=getKey();persist('activeKey',$('activeKey').value);if(key)applyConfig(key.sheet||{count:40,options:4,shape:'circle'});else applyConfig(config);if(current){current=null;$('reviewBody').hidden=true;$('reviewEmpty').hidden=false;message('Answer key changed. Scan the paper again.');}}
+$('activeKey').onchange=selectKey;
+for(const id of ['questionCount','optionCount','bubbleShape'])$(id).onchange=()=>{
+  const next=settings({count:$('questionCount').value,options:$('optionCount').value,shape:$('bubbleShape').value});
+  const filtered=Object.fromEntries(Object.entries(keyDraft).filter(([q,a])=>Number(q)<=next.count&&'ABCDE'.slice(0,next.options).includes(a)));
+  if(Object.keys(filtered).length<Object.keys(keyDraft).length&&!confirm('This removes answers outside the new question count/options. Continue?')){applyConfig(config);return;}
+  keyDraft=filtered;applyConfig(next);updateKeyGrid();current=null;$('reviewBody').hidden=true;$('reviewEmpty').hidden=false;
+};
+$('printSheetBtn').onclick=()=>{download('<!doctype html><html><head><meta charset="utf-8"><title>Skorskal answer sheet</title><style>@page{size:A4;margin:0}body{margin:0}svg{display:block;width:210mm;height:297mm}button{margin:12px}@media print{button{display:none}}</style></head><body><button onclick="window.print()">Print / Save as PDF (A4, actual size, no margins)</button>'+sheetSVG(template)+'</body></html>',`Skorskal_${config.count}_${config.options}_${config.shape}.html`,'text/html');toast('Open the downloaded sheet to print or save as PDF.');};
+
+function renderKeys(){const id=keyId($('keyYear').value,$('keySubject').value),key=keys[id];if(key){$('keyTitle').value=key.title;keyDraft={...key.answers};applyConfig(key.sheet||{count:40,options:4,shape:'circle'});}else{keyDraft={};$('keyTitle').value='';}updateKeyGrid();renderSavedKeys();}
 for(const id of ['keyYear','keySubject'])$(id).addEventListener('change',renderKeys);
 $('loadKeyBtn').onclick=()=>{renderKeys();toast('Current key loaded.');};
 $('clearKeyBtn').onclick=()=>{keyDraft={};updateKeyGrid();};
 $('saveKeyBtn').onclick=()=>{const year=$('keyYear').value,subject=$('keySubject').value;
   if(!Object.keys(keyDraft).length){toast('Select at least one answer.');return;}
-  keys[keyId(year,subject)]={year,subject,title:$('keyTitle').value.trim()||`Year ${year} · Subject ${subject}`,answers:{...keyDraft}};
-  persist('keys',keys);renderSavedKeys();if(current)refreshReview();toast(`Saved key ${year}-${subject} (${Object.keys(keyDraft).length} answers).`);
+  keys[keyId(year,subject)]={year,subject,title:$('keyTitle').value.trim()||`Year ${year} · Subject ${subject}`,answers:{...keyDraft},sheet:{...config}};
+  persist('keys',keys);renderSavedKeys();refreshKeySelector(keyId(year,subject));if(current)refreshReview();toast(`Saved key ${year}-${subject} (${Object.keys(keyDraft).length} answers).`);
 };
 $('applyPasteBtn').onclick=()=>{
   const source=$('keyPaste').value.trim().toUpperCase();
-  if(!source){toast('Paste 20 or 40 answers first.');return;}
-  const numbered=[...source.matchAll(/(?:^|[\s,;])([1-9]|[1-3]\d|40)\s*[:.=\-]\s*([ABCD])(?=$|[\s,;])/g)];
-  const fresh={};let count=0;
+  if(!source){toast('Paste answers first.');return;}
+  const fresh={},numbered=[...source.matchAll(/(?:^|[\s,;])(\d+)\s*[:.=\-]\s*([A-E])(?=$|[\s,;])/g)];
   if(numbered.length){
-    for(const match of numbered){const q=String(Number(match[1]));if(fresh[q]){toast('Duplicate question '+q+'.');return;}fresh[q]=match[2];}
-    count=Object.keys(fresh).length;
+    const remainder=source.replace(/(?:^|[\s,;])(\d+)\s*[:.=\-]\s*([A-E])(?=$|[\s,;])/g,'').replace(/[\s,;]/g,'');
+    if(remainder){toast('Check the numbered answer format.');return;}
+    for(const [,n,ans] of numbered){const q=Number(n);if(q<1||q>config.count||fresh[q]||!'ABCDE'.slice(0,config.options).includes(ans)){toast('Check question numbers and selected answer options.');return;}fresh[q]=ans;}
   }else{
-    const letters=source.replace(/[^ABCD]/g,'');
-    if(letters.length!==20&&letters.length!==40){toast('Expected 20 or 40 A–D letters; found '+letters.length+'.');return;}
-    for(let i=0;i<letters.length;i++)fresh[String(i+1)]=letters[i];
-    count=letters.length;
+    const letters=source.replace(/[\s,;]/g,'');
+    if(!letters.length||letters.length>config.count||[...letters].some(a=>!'ABCDE'.slice(0,config.options).includes(a))){toast('Use up to '+config.count+' answers from the selected options.');return;}
+    [...letters].forEach((a,i)=>fresh[i+1]=a);
   }
-  keyDraft=fresh; // Replace the entire draft; no stale answers in Q21–40.
-  updateKeyGrid();
-  toast(count+' answers applied. Save the answer key to keep them.');
+  keyDraft=fresh;updateKeyGrid();toast(Object.keys(fresh).length+' answers applied. Save the answer key to keep them.');
 };
 function renderSavedKeys(){const box=$('savedKeys');box.innerHTML='';const saved=Object.values(keys);
   if(!saved.length){box.innerHTML='<p>No answer keys saved yet.</p>';return;}
   for(const key of saved){const row=document.createElement('div');row.className='saved-key';
-    const text=document.createElement('div');text.innerHTML=`<strong>${safeText(key.title)}</strong><small>Year ${safeText(key.year)} · Subject ${safeText(key.subject)} · ${Object.keys(key.answers).length}/40 answers</small>`;
+    const text=document.createElement('div');text.innerHTML=`<strong>${safeText(key.title)}</strong><small>Year ${safeText(key.year)} · Subject ${safeText(key.subject)} · ${Object.keys(key.answers).length}/${key.sheet?.count||40} answers</small>`;
     const b=document.createElement('button');b.textContent='Edit';b.onclick=()=>{$('keyYear').value=key.year;$('keySubject').value=key.subject;renderKeys();scrollTo({top:0,behavior:'smooth'});};row.append(text,b);box.appendChild(row);
   }
 }
@@ -277,7 +297,7 @@ for(const id of ['rosterYear','rosterClass'])$(id).addEventListener('change',ren
 function renderRoster(){
  const list=$('attendanceList');list.replaceChildren();
  const year=$('rosterYear').value,cls=$('rosterClass').value;
- const latest=new Map();for(const r of records){if(r.year===year&&r.classCode===cls)latest.set(personId(r.year,r.classCode,r.examNo),r);}
+ const latest=new Map();for(const r of records){if(r.year===year&&r.classCode===cls)latest.set(r.year&&r.classCode&&r.examNo?personId(r.year,r.classCode,r.examNo):r.id,r);}
  const pupils=[...latest.values()].sort((a,b)=>Number(a.examNo)-Number(b.examNo));
  $('rosterCount').textContent=pupils.length+' marked pupils';
  for(const pupil of pupils){
@@ -293,8 +313,8 @@ function renderRoster(){
 function renderResults(){const tb=$('resultsTable');tb.innerHTML='';$('resultsCount').textContent=`${records.length} saved`;
   for(const rec of [...records].reverse()){
     const tr=document.createElement('tr'),mark=rec.correct===null?'—':`${rec.correct}/${rec.count}`;
-    tr.innerHTML=`<td>${safeText(rec.name)}<br><small>${safeText(personId(rec.year,rec.classCode,rec.examNo))}</small></td><td>${safeText(rec.subject)}<br><small>${new Date(rec.date).toLocaleDateString()}</small></td><td>${mark}</td><td>${safeText(rec.status)}</td>`;
-    const td=document.createElement('td'),del=document.createElement('button');del.className='table-btn danger';del.textContent='Delete';del.onclick=()=>{if(!confirm('Delete this saved scan?'))return;records=records.filter(r=>r.id!==rec.id);persist('results',records);renderResults();};td.appendChild(del);tr.appendChild(td);tb.append(tr);
+    tr.innerHTML=`<td>${safeText(rec.name)}<br><small>${safeText(personId(rec.year,rec.classCode,rec.examNo))}</small></td><td>${safeText(rec.keyTitle||rec.subject)}<br><small>${new Date(rec.date).toLocaleDateString()}</small></td><td>${mark}</td><td>${safeText(rec.status)}</td>`;
+    const td=document.createElement('td'),del=document.createElement('button');del.className='table-btn danger';del.textContent='Delete';del.onclick=()=>{if(!confirm('Delete this saved scan?'))return;records=records.filter(r=>r.id!==rec.id);persist('results',records);renderResults();};const rename=document.createElement('button');rename.className='table-btn';rename.textContent='Name';rename.onclick=()=>{const name=prompt('Pupil name (optional):',rec.name||'');if(name===null)return;rec.name=name.trim().slice(0,120)||'Unnamed scan';persist('results',records);renderResults();};td.append(rename,del);tr.appendChild(td);tb.append(tr);
   }
   if(!records.length)tb.innerHTML='<tr><td colspan="5">No results saved. Scan a paper to get started.</td></tr>';
 }
@@ -312,22 +332,23 @@ $('restoreInput').addEventListener('change',async e=>{
     if(!confirm('Restore saved answer keys and exam results?'))return;
     keys=backup.keys;records=backup.records;
     persist('keys',keys);persist('results',records);
-    renderResults();renderKeys();renderRoster();toast('Exam keys and results restored.');
+    renderResults();renderKeys();refreshKeySelector();renderRoster();toast('Exam keys and results restored.');
   }catch(err){toast(err.message);}
   finally{e.target.value='';}
 });
 $('exportWorkbookBtn').onclick=()=>{
-  try{const latest=new Map();for(const r of records)latest.set(personId(r.year,r.classCode,r.examNo),r);
-    const markedPeople=[...latest.values()].map(r=>({year:r.year,classCode:r.classCode,examNo:r.examNo,name:r.name}));
+  try{const latest=new Map();for(const r of records)latest.set(r.year&&r.classCode&&r.examNo?personId(r.year,r.classCode,r.examNo):r.id,r);
+    const markedPeople=[...latest.values()].map(r=>({id:r.id,year:r.year,classCode:r.classCode,examNo:r.examNo,name:r.name}));
     download(createRosterWorkbook(markedPeople,records),'Skorskal_Marked_Pupils.xlsx');toast('Marked pupils exported to Excel.');}
   catch(e){toast('Excel export failed: '+e.message);}
 };
 
 async function init(){try{
-  template=await fetch('./template.json').then(r=>{if(!r.ok)throw new Error('Template not found.');return r.json();});
-  if(Object.keys(template.questions).length!==40||Object.keys(template.anchors).length!==4)throw new Error('OMR calibration file invalid.');
+  baseTemplate=await fetch('./template.json').then(r=>{if(!r.ok)throw new Error('Template not found.');return r.json();});
+  template=buildTemplate(baseTemplate,config);
+  if(Object.keys(baseTemplate.questions).length!==40||Object.keys(template.anchors).length!==4)throw new Error('OMR calibration file invalid.');
   seedMenus();$('rosterYear').value='2';$('rosterClass').value='C';
-  renderKeys();renderRoster();renderResults();
+  renderKeys();refreshKeySelector(load('activeKey',''));renderRoster();renderResults();
   // No roster access code is required by the exam scanner.
   if('serviceWorker'in navigator && location.protocol!=='file:')navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'}).then(reg=>reg.update()).catch(()=>{});
 }catch(e){message('Could not initialize Skorskal: '+e.message+'. Serve this folder over localhost or HTTPS.','error');}}

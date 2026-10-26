@@ -10,6 +10,7 @@ on:
       - 'index.html'
       - 'style.css'
       - 'vision.js'
+      - 'sheet.js'
       - 'workbook.js'
       - 'roster-2026.json'
       - 'template.json'
@@ -151,3 +152,4 @@ jobs:
           Android checks for an update when Skorskal launches, and teachers can
           tap the ↻ update button. The download is SHA-256 verified.
           Android asks for approval before installing; saved records remain local."
+

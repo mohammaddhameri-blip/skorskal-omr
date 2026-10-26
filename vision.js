@@ -117,19 +117,19 @@ export function straighten(cv,corners){
 
 function bubbleIntensity(warp,bub){
   const {gray,width,height,scale}=warp;
-  const x=bub.x*scale,y=(HEIGHT-bub.y)*scale,r=bub.radius_pt*scale;
+  const x=bub.x*scale,y=(HEIGHT-bub.y)*scale,r=bub.radius_pt*scale,rx=(bub.rx||bub.radius_pt)*scale,ry=(bub.ry||bub.radius_pt)*scale;
   // Diagonal background samples stay outside the printed bubble border.
   const samples=[];
   for(const [dx,dy] of [[-1.62,-1.62],[-1.62,1.62],[1.62,-1.62],[1.62,1.62],[0,-1.95],[0,1.95]]){
-    const sx=Math.round(x+dx*r),sy=Math.round(y+dy*r);
+    const sx=Math.round(x+dx*rx),sy=Math.round(y+dy*ry);
     if(sx>=0&&sx<width&&sy>=0&&sy<height)samples.push(gray[sy*width+sx]);
   }
   samples.sort((a,b)=>a-b);const base=samples.length ? samples[Math.floor(samples.length*.55)] : 250;
   let total=0,n=0,filled=0;
-  const bound=r*.66,rr=bound*bound;
-  for(let iy=Math.ceil(y-bound);iy<=Math.floor(y+bound);iy++){
-    for(let ix=Math.ceil(x-bound);ix<=Math.floor(x+bound);ix++){
-      if((ix-x)**2+(iy-y)**2>rr || iy<0 || ix<0 || iy>=height || ix>=width)continue;
+  const bx=rx*.66,by=ry*.66;
+  for(let iy=Math.ceil(y-by);iy<=Math.floor(y+by);iy++){
+    for(let ix=Math.ceil(x-bx);ix<=Math.floor(x+bx);ix++){
+      if(((ix-x)/bx)**2+((iy-y)/by)**2>1 || iy<0 || ix<0 || iy>=height || ix>=width)continue;
       const delta=base-gray[iy*width+ix];
       total+=Math.max(0,Math.min(1,(delta-13)/145));n++;
       if(delta>54)filled++;

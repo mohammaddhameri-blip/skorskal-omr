@@ -1,7 +1,13 @@
 {
   "name": "skorskal-omr",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Static four-anchor 40-question OMR grading app"
+  "description": "Configurable on-device OMR grading",
+  "scripts": {
+    "test": "node test-app.mjs && node test-sheet.mjs"
+  },
+  "devDependencies": {
+    "@napi-rs/canvas": "0.1.100"
+  }
 }

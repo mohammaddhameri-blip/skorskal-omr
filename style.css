@@ -119,3 +119,8 @@ html[data-theme="dark"] .toast{background:#234451;color:#fff;}
 [data-theme=dark] .attendance-pupil.is-absent{--attendance-absent-bg:#422d31;--attendance-absent-border:#805057}
 [data-theme=dark] .attendance-filters input[type=date]{background:#102530;color:#ddecf1;border-color:#41606c}
 @media(max-width:600px){.attendance-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.attendance-filters label:last-child{grid-column:1/-1}.attendance-summary{gap:12px}.attendance-pupil{gap:9px;padding:10px 8px}.attendance-name{font-size:12px}}
+
+
+/* Keep five choices usable on narrow phones; printed sheets remain two columns. */
+@media(max-width:480px){.answers-review{grid-template-columns:1fr}}
+@media(max-width:360px){.key-grid{grid-template-columns:1fr}}

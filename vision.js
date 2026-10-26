@@ -1,6 +1,6 @@
 // skorskal — offline-friendly OMR image registration and bubble reading.
 const WIDTH = 595.2756, HEIGHT = 841.8898;
-const markerPts = [[39,39],[556.276,39],[39,802.8898],[556.276,802.8898]];
+
 
 export function imageToPixels(source, maxLong = 1600) {
   const w = source.naturalWidth || source.videoWidth || source.width;
@@ -79,7 +79,8 @@ function linearSolve(a,b){
   }
   return b;
 }
-function homography(dst) {
+function homography(dst,template) {
+  const markerPts=['top_left','top_right','bottom_left','bottom_right'].map(k=>[template.anchors[k].x,HEIGHT-template.anchors[k].y]);
   const A=[],b=[];
   for(let i=0;i<4;i++){
     const [x,y]=markerPts[i],{x:u,y:v}=dst[i];
@@ -89,11 +90,11 @@ function homography(dst) {
   return linearSolve(A,b);
 }
 
-export function straighten(cv,corners){
+export function straighten(cv,corners,template){
   const im=cv.getContext('2d',{willReadFrequently:true}).getImageData(0,0,cv.width,cv.height);
   const source=luminance(im), srcW=cv.width,srcH=cv.height;
   const scale=1.55, w=Math.round(WIDTH*scale), h=Math.round(HEIGHT*scale);
-  const out=new Uint8Array(w*h),H=homography(corners);
+  const out=new Uint8Array(w*h),H=homography(corners,template);
   let k=0,valid=0;
   for(let y=0;y<h;y++){
     const yp=y/scale;
@@ -149,6 +150,7 @@ export function analyze(warp,template){
     }
     return {answer,status,confidence:+strongest.score.toFixed(3),scores:Object.fromEntries(vals.map(v=>[v.option,+v.score.toFixed(3)]))};
   };
-  return {id:Object.fromEntries(Object.entries(template.identification).map(([k,v])=>[k,evaluate(v.bubbles)])),
+  return {id:{},
           answers:Object.fromEntries(Object.entries(template.questions).map(([k,v])=>[k,evaluate(v.bubbles)]))};
 }
+

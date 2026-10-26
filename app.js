@@ -88,7 +88,7 @@ async function processCanvas(cv){
 function defaultCorners(){const w=workCanvas.width,h=workCanvas.height;return[{x:w*.07,y:h*.07},{x:w*.93,y:h*.07},{x:w*.07,y:h*.93},{x:w*.93,y:h*.93}];}
 async function processCorners(){
   if(!workCanvas||!corners)return;
-  warp=straighten(workCanvas,corners);scanned=analyze(warp,template);sample=false;
+  warp=straighten(workCanvas,corners,template);scanned=analyze(warp,template);sample=false;
   adjusting=false;$('applyBtn').hidden=true;$('manualBtn').hidden=false;
   showAligned();initReview();
 }
@@ -108,18 +108,15 @@ $('demoBtn').addEventListener('click',async()=>{
   const cv=await sheetCanvas(template),ctx=cv.getContext('2d');
   const scale=cv.width/template.page.width_pt, h=template.page.height_pt;
   const mark=b=>{ctx.fillStyle='#0a0c11';ctx.beginPath();ctx.ellipse(b.x*scale,(h-b.y)*scale,(b.rx||b.radius_pt)*scale*.85,(b.ry||b.radius_pt)*scale*.85,0,0,2*Math.PI);ctx.fill();};
-  const ids={year:'5',class:'T',examinee_tens:'1',examinee_ones:'2',subject_tens:'0',subject_ones:'2'};
-  Object.entries(ids).forEach(([key,val])=>mark(template.identification[key].bubbles[val]));
   Object.entries(template.questions).forEach(([q,obj])=>mark(obj.bubbles['ABCDE'[(Number(q)-1)%config.options]]));
   stopCamera();await processCanvas(cv);sample=true;if(current){current.sample=true;refreshReview();}
-  message('Sample sheet: 5T-12-02 with repeating answer choices. It uses a temporary sample answer key and cannot be saved as a pupil result.','success');
+  message('Sample sheet with repeating answer choices. It uses a temporary sample answer key and cannot be saved as a pupil result.','success');
 });
 
 // Review, manual corrections, grading, result persistence.
-function readId(){const fields=['year','class','examinee_tens','examinee_ones','subject_tens','subject_ones'];return fields.map(k=>scanned.id[k].answer||'');}
 function currentInfo(){const year=$('editYear').value.trim(),cls=$('editClass').value.trim().toUpperCase(),num=$('editNo').value.trim()?code($('editNo').value.trim()):'',subject=$('editSubject').value.trim()?code($('editSubject').value.trim()):'';return {year,classCode:cls,examNo:num,subject};}
 function initReview(){
-  const [year,cls,n1,n2,s1,s2]=readId();
+  const key=getKey(),year=key?.year||'',cls='',n1='',n2='',s1=key?.subject||'',s2='';
   $('reviewEmpty').hidden=true;$('reviewBody').hidden=false;
   $('editYear').value=year;$('editClass').value=cls;$('editNo').value=n1+n2;$('editSubject').value=s1+s2;$('editPupilName').value='';$('editPupilName').placeholder='Type name from paper (optional)';
   current={answers:Object.fromEntries(Object.entries(scanned.answers).map(([q,o])=>[q,{...o}])),sample:sample};
@@ -139,11 +136,6 @@ function calculate(){
 function refreshReview(){
   if(!current)return;
   const {info,key,counts}=calculate(),p=(info.year&&info.classCode&&info.examNo?getPerson(info.year,info.classCode,info.examNo):null);
-  $('detectedId').textContent=`${info.year||'?'}${info.classCode||'?'}-${info.examNo}-${info.subject}`;
-  $('pupilName').textContent=p?.name||'Unnamed scan — name optional';
-  if(p&&!$('editPupilName').value.trim())$('editPupilName').placeholder=p.name;
-  const goodId=yearChoices.includes(info.year)&&['C','G','T'].includes(info.classCode)&&/^\d{2}$/.test(info.examNo)&&/^\d{2}$/.test(info.subject)&&$('editNo').value.trim().length>0&&$('editSubject').value.trim().length>0;
-  $('idBadge').textContent=goodId?'ID ready':'ID optional';$('idBadge').className=`mini-pill ${goodId?'ok':'warn'}`;
   const invalid=Object.values(current.answers).filter(a=>a.status!=='ok').length;
   $('reviewStatus').textContent=invalid?`${invalid} require review`:'All read';$('reviewStatus').className=`mini-pill ${invalid?'warn':'ok'}`;
   $('markTotal').textContent=key?`${counts.total}/${counts.checked}`:'Not graded';
@@ -154,7 +146,7 @@ function refreshReview(){
   $('scoreLeft').textContent=key?`${counts.left}/${lmax}`:'—';$('scoreRight').textContent=key?`${counts.right}/${rmax}`:'—';
   $('scoreReview').textContent=invalid;
   $('saveWarning').hidden=!!(key&&!invalid&&!current.sample);
-  $('saveWarning').textContent=[current.sample?'Demo mode: this is not a real pupil. Scan a real sheet to save marks.':'','',!p?'Name and pupil ID are optional.':'',!key?'Select an answer key before saving.':'',invalid?`${invalid} blank, multiple, or uncertain answers currently count as zero.`:''].filter(Boolean).join(' ');
+  $('saveWarning').textContent=[current.sample?'Demo mode: this is not a real pupil. Scan a real sheet to save marks.':'','',!p?'Pupil name is optional.':'',!key?'Select an answer key before saving.':'',invalid?`${invalid} blank, multiple, or uncertain answers currently count as zero.`:''].filter(Boolean).join(' ');
   $('saveResultBtn').disabled=!key||!!current.sample;
 }
 function renderAnswerGrid(){
@@ -353,3 +345,4 @@ async function init(){try{
   if('serviceWorker'in navigator && location.protocol!=='file:')navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'}).then(reg=>reg.update()).catch(()=>{});
 }catch(e){message('Could not initialize Skorskal: '+e.message+'. Serve this folder over localhost or HTTPS.','error');}}
 init();
+

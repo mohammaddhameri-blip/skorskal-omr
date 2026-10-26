@@ -5,7 +5,7 @@
   <meta name="theme-color" content="#102739"><meta name="description" content="skorskal: mobile OMR grading for 40-question A4 sheets. All marking stays on this device.">
   <link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <script>try{document.documentElement.dataset.theme=localStorage.getItem('skorskal_theme')==='dark'?'dark':'light'}catch(e){document.documentElement.dataset.theme='light'}</script>
-  <link rel="stylesheet" href="style.css?v=20261026-flexible"><title>skorskal · OMR Scanner</title>
+  <link rel="stylesheet" href="style.css?v=20261027-answers-only"><title>skorskal · OMR Scanner</title>
 </head>
 <body>
 <header class="app-header">
@@ -22,7 +22,7 @@
   <main>
     <section class="page visible" id="page-scan">
       <div class="page-heading"><div><span class="eyebrow">OMR SCANNER</span><h1>Mark a paper</h1><p>Point the camera at all four black squares, or upload a photo.</p></div><button class="btn secondary" id="printSheetBtn">Download printable OMR ↗</button></div>
-      <div class="card slim"><label>Answer scheme<select id="activeKey"></select></label><p id="sheetInfo" class="helper"></p><p class="helper">No class roster needed. Name and ID are optional. Match the sheet settings before scanning.</p></div><div class="scan-layout">
+      <div class="card slim"><label>Answer scheme<select id="activeKey"></select></label><p id="sheetInfo" class="helper"></p><p class="helper">No class roster needed. Only shaded answers are scanned. Pupil name is optional. Match the sheet settings before scanning.</p></div><div class="scan-layout">
         <div class="card scan-card">
           <div class="scanner-stage" id="scannerStage">
             <div id="emptyScan" class="scan-empty"><div class="scan-icon">⌗</div><strong>Ready to scan</strong><p>Use a well-lit, flat A4 sheet.<br>Keep all four corner squares visible.</p></div>
@@ -49,12 +49,11 @@
         </div>
         <div class="card review-card" id="reviewCard">
           <div class="card-head"><h2>Scan review</h2><span id="reviewStatus" class="mini-pill">Waiting</span></div>
-          <div id="reviewEmpty" class="review-empty"><div>◎</div><p>Your detected pupil and answer results will appear here.</p></div>
+          <div id="reviewEmpty" class="review-empty"><div>◎</div><p>Your detected answers and marks will appear here.</p></div>
           <div id="reviewBody" hidden>
-            <div class="review-id"><div><small>DETECTED ID</small><strong id="detectedId">—</strong><p id="pupilName">Identified by exam number</p></div><span id="idBadge" class="mini-pill">Check</span></div>
             <p class="field-label">Pupil details (optional)</p>
             <label class="pupil-name-entry">Pupil name (optional)<input id="editPupilName" autocomplete="off" placeholder="Type name from paper"></label>
-            <div class="field-grid four"><label>Year<input id="editYear" inputmode="numeric" maxlength="1"></label><label>Class<input id="editClass" maxlength="1"></label><label>No.<input id="editNo" inputmode="numeric" maxlength="2"></label><label>Subject<input id="editSubject" inputmode="numeric" maxlength="2"></label></div>
+            <div class="field-grid four"><label>Year<input id="editYear" inputmode="numeric" maxlength="1"></label><label>Class<input id="editClass" maxlength="1"></label><input id="editNo" type="hidden"><label>Subject<input id="editSubject" inputmode="numeric" maxlength="2"></label></div>
             <div class="score-wrap"><div><small>MARKS</small><strong id="markTotal">—</strong><p id="gradeInfo">Set an answer key to grade</p></div><div class="score-rings"><span id="scorePercent">—</span></div></div>
             <div class="summary-grid"><div><small id="leftLabel">Q1–20</small><strong id="scoreLeft">—</strong></div><div><small id="rightLabel">Q21–40</small><strong id="scoreRight">—</strong></div><div><small>To review</small><strong id="scoreReview">—</strong></div></div>
             <div class="answer-tools"><h3>Answers</h3><span class="helper">Tap a choice to correct a scan</span></div>
@@ -69,7 +68,7 @@
     <section class="page" id="page-keys">
       <div class="page-heading"><div><span class="eyebrow">ANSWER KEYS</span><h1>Set up marking</h1><p>Create one key for each year and subject. Saved keys remain available for the next pupil.</p></div></div>
       <div class="card form-card"><div class="field-grid three"><label>Year<select id="keyYear"></select></label><label>Subject code<select id="keySubject"></select></label><label>Examination / key name<input id="keyTitle" placeholder="e.g. Year 5 English UASA"></label></div>
-        <div class="field-grid three"><label>Questions (1–60)<input id="questionCount" type="number" min="1" max="60" value="40"></label><label>Answer options<select id="optionCount"><option value="2">A, B</option><option value="3">A, B, C</option><option value="4" selected>A, B, C, D</option><option value="5">A, B, C, D, E</option></select></label><label>Bubble shape<select id="bubbleShape"><option value="circle">Circular</option><option value="oval">Oval</option></select></label></div><div class="key-actions"><button class="btn secondary" id="loadKeyBtn">Load saved key</button><button class="btn secondary" id="clearKeyBtn">Clear choices</button><button class="btn primary" id="saveKeyBtn">Save answer key</button></div>
+        <div class="field-grid three"><label>Questions (1–60)<input id="questionCount" type="number" min="1" max="60" value="20"></label><label>Answer options<select id="optionCount"><option value="2">A, B</option><option value="3">A, B, C</option><option value="4" selected>A, B, C, D</option><option value="5">A, B, C, D, E</option></select></label><label>Bubble shape<select id="bubbleShape"><option value="circle">Circular</option><option value="oval">Oval</option></select></label></div><div class="key-actions"><button class="btn secondary" id="loadKeyBtn">Load saved key</button><button class="btn secondary" id="clearKeyBtn">Clear choices</button><button class="btn primary" id="saveKeyBtn">Save answer key</button></div>
         <div class="card-divider"></div>
         <div class="key-paste"><label>Quick paste (optional)<textarea id="keyPaste" rows="2" placeholder="Paste answer letters (A–E), or numbered answers such as 1:A 2:C ..."></textarea></label><button class="btn secondary" id="applyPasteBtn">Apply pasted answers</button></div>
         <div class="key-grid" id="keyGrid"></div>
@@ -93,9 +92,10 @@
       <div class="card slim"><div class="card-head"><h3>All results</h3><span class="mini-pill" id="resultsCount">0 saved</span></div><div class="scroll-table"><table><thead><tr><th>Pupil</th><th>Paper</th><th>Mark</th><th>Status</th><th></th></tr></thead><tbody id="resultsTable"></tbody></table></div></div>
     </section>
   </main>
-  <footer>skorskal© by MrDhameri <span>·</span> A4 <span>·</span> 1–60 questions <span>·</span> v1.5 <span>·</span> On-device marking</footer>
+  <footer>skorskal© by MrDhameri <span>·</span> A4 <span>·</span> 1–60 questions <span>·</span> v1.6 <span>·</span> On-device marking</footer>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
-<script type="module" src="app.js?v=20261026-flexible"></script>
+<script type="module" src="app.js?v=20261027-answers-only"></script>
 </body>
 </html>
+

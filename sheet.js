@@ -16,16 +16,16 @@ export function buildTemplate(base,value){
 }
 export function sheetSVG(t){
   const h=t.page.height_pt,w=t.page.width_pt,s=t.settings;
-  const text=(x,y,v,size=10)=>`<text x="${x}" y="${y}" font-size="${size}" font-family="Arial">${v}</text>`;
+  const text=(x,y,v,size=10)=>`<text x="${x}" y="${y}" font-size="${size}" font-family="Times New Roman, Times, serif">${v}</text>`;
   let out=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="210mm" height="297mm"><rect width="100%" height="100%" fill="white"/>`;
   for(const a of Object.values(t.anchors))out+=`<rect x="${a.x-10}" y="${h-a.y-10}" width="20" height="20"/>`;
-  out+=`<text x="${w/2}" y="55" text-anchor="middle" font-size="18" font-weight="bold" font-family="Arial">KERTAS JAWAPAN OBJEKTIF</text>`;
-  out+=`<text x="${w/2}" y="77" text-anchor="middle" font-size="13" font-family="Arial">OBJECTIVE ANSWER SHEET (OAS)</text>`;
+  out+=`<text x="${w/2}" y="55" text-anchor="middle" font-size="18" font-weight="bold" font-family="Times New Roman, Times, serif">KERTAS JAWAPAN OBJEKTIF</text>`;
+  out+=`<text x="${w/2}" y="77" text-anchor="middle" font-size="13" font-family="Times New Roman, Times, serif">OBJECTIVE ANSWER SHEET (OAS)</text>`;
   out+=text(65,112,'NAMA / NAME: __________________________________________________',11);
   out+=text(65,140,'KELAS / CLASS: _________________________________________________',11);
   const bubble=(b,label)=>`<ellipse cx="${b.x}" cy="${h-b.y}" rx="${b.rx||b.radius_pt}" ry="${b.ry||b.radius_pt}" fill="none" stroke="black" stroke-width="0.7"/>`+text(b.x-2.2,h-b.y+2,label,6);
   for(const [q,row] of Object.entries(t.questions)){const first=Object.values(row.bubbles)[0];out+=text(first.x-30,h-first.y+3,q+'.');for(const [label,b] of Object.entries(row.bubbles))out+=bubble(b,label);}
-  out+=text(195,815,'skorskal© by MrDhameri',10)+'</svg>';return out;
+  out+=`<text x="${w/2}" y="815" text-anchor="middle" font-size="10" font-family="Times New Roman, Times, serif">skorskal© by MrDhameri</text>`+'</svg>';return out;
 }
 export async function sheetCanvas(t){const svg=sheetSVG(t),url=URL.createObjectURL(new Blob([svg],{type:'image/svg+xml'}));try{const img=new Image();img.src=url;await img.decode();const cv=document.createElement('canvas');cv.width=1191;cv.height=1684;cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);return cv;}finally{URL.revokeObjectURL(url);}}
 

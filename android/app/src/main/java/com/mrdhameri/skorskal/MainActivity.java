@@ -134,6 +134,11 @@ public class MainActivity extends Activity {
         if (updates != null) updates.onResume();
     }
 
+    @Override protected void onPause() {
+        if (updates != null) updates.onPause();
+        super.onPause();
+    }
+
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(requestCode, permissions, results);
         if (requestCode == CAMERA_REQUEST && pendingCamera != null) {

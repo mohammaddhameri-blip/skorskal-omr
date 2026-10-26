@@ -39,6 +39,10 @@ final class UpdateManager {
     private final Activity activity;
     private final AtomicBoolean busy = new AtomicBoolean(false);
     private File pendingApk;
+    private boolean foreground;
+    private boolean readyToInstall;
+    private long lastCheckAt;
+    private static final long CHECK_INTERVAL_MS = 5 * 60 * 1000L;
     private boolean waitingForInstallPermission;
 
     UpdateManager(Activity activity) {
@@ -46,10 +50,13 @@ final class UpdateManager {
     }
 
     void checkForUpdates(boolean manual) {
+        long now = android.os.SystemClock.elapsedRealtime();
+        if (!manual && lastCheckAt != 0 && now - lastCheckAt < CHECK_INTERVAL_MS) return;
         if (!busy.compareAndSet(false, true)) {
             if (manual) toast("Skorskal is already checking or downloading an update.");
             return;
         }
+        lastCheckAt = now;
         new Thread(() -> {
             try {
                 JSONObject release = new JSONObject(new String(downloadBytes(API, 512 * 1024), StandardCharsets.UTF_8));
@@ -85,15 +92,8 @@ final class UpdateManager {
                 }
                 if (!isPublisherAsset(apkUrl, "android-latest") || !isPublisherAsset(checksumUrl, "android-latest"))
                     throw new Exception("Update does not originate from the Skorskal publisher's release.");
-                String chosenApk = apkUrl, chosenSum = checksumUrl;
-                ui(() -> new AlertDialog.Builder(activity)
-                    .setTitle("Skorskal update available")
-                    .setMessage("Installed: " + current + "\nAvailable: " + latest
-                        + "\n\nDownload the official APK from your GitHub repository? "
-                        + "Android will ask for approval before installation. Saved marking records stay on this device.")
-                    .setNegativeButton("Later", null)
-                    .setPositiveButton("Download update", (d, which) -> downloadAndInstall(chosenApk, chosenSum, apkName))
-                    .show());
+                // Keep the same worker and busy lock throughout check + download.
+                downloadAndInstall(apkUrl, checksumUrl, apkName);
             } catch (Exception error) {
                 if (manual) ui(() -> new AlertDialog.Builder(activity)
                     .setTitle("Update check unavailable")
@@ -106,10 +106,8 @@ final class UpdateManager {
     }
 
     private void downloadAndInstall(String apkUrl, String checksumUrl, String fileName) {
-        if (!busy.compareAndSet(false, true)) return;
         toast("Downloading Skorskal update from GitHub...");
-        new Thread(() -> {
-            File output = null;
+        File output = null;
             try {
                 String expected = new String(downloadBytes(checksumUrl, 1024), StandardCharsets.UTF_8)
                     .trim().split("\\s+")[0].toLowerCase(Locale.ROOT);
@@ -142,7 +140,9 @@ final class UpdateManager {
                 File verified = output;
                 ui(() -> {
                     toast("APK downloaded and verified.");
-                    promptInstall(verified);
+                    pendingApk = verified;
+                    readyToInstall = true;
+                    if (foreground) promptInstall(verified);
                 });
             } catch (Exception error) {
                 if (output != null) output.delete();
@@ -150,14 +150,12 @@ final class UpdateManager {
                     .setTitle("Update download failed")
                     .setMessage(error.getMessage())
                     .setPositiveButton("OK", null).show());
-            } finally {
-                busy.set(false);
             }
-        }, "skorskal-update-download").start();
     }
 
     private void promptInstall(File apk) {
         pendingApk = apk;
+        readyToInstall = false;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 && !activity.getPackageManager().canRequestPackageInstalls()) {
             waitingForInstallPermission = true;
@@ -188,11 +186,18 @@ final class UpdateManager {
         }
     }
 
+    void onPause() { foreground = false; }
+
     void onResume() {
+        foreground = true;
         if (waitingForInstallPermission && pendingApk != null &&
             (Build.VERSION.SDK_INT < Build.VERSION_CODES.O
                 || activity.getPackageManager().canRequestPackageInstalls())) {
             promptInstall(pendingApk);
+        } else if (readyToInstall && pendingApk != null) {
+            promptInstall(pendingApk);
+        } else if (!waitingForInstallPermission) {
+            checkForUpdates(false);
         }
     }
 
@@ -246,5 +251,9 @@ final class UpdateManager {
     }
 
     private void toast(String message) { ui(() -> Toast.makeText(activity, message, Toast.LENGTH_LONG).show()); }
-    private void ui(Runnable action) { activity.runOnUiThread(action); }
+    private void ui(Runnable action) {
+        activity.runOnUiThread(() -> {
+            if (!activity.isFinishing() && !activity.isDestroyed()) action.run();
+        });
+    }
 }
